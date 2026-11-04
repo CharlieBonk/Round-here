@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Round Here">
+<meta name="theme-color" content="#1E5B3C">
+<title>Round Here</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+/* Layout: full-bleed map; floating chips top; one bottom sheet with three views (plan / route / walk). */
+:root{
+  color-scheme: light;
+  --bg:#EEF1EC; --panel:#FFFFFF; --panel-2:#F3F6F1; --fg:#182019; --muted:#5E6A61; --line:#D3DAD2;
+  --accent:#1E5B3C; --accent-fg:#FFFFFF; --accent-soft:#DDEDE3;
+  --route:#D1237A; --route-done:#8C949A; --me:#1769E0;
+  --ok:#1F7A4D; --ok-bg:#DFF1E6; --warn:#B4361C; --warn-bg:#FBE9E3;
+  --display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --radius:20px; --shadow:0 10px 30px rgba(16,24,18,.22);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#121715; --panel:#1B221E; --panel-2:#222B26; --fg:#E7ECE6; --muted:#98A59C; --line:#2E3933;
+    --accent:#4FB37A; --accent-fg:#0E1A12; --accent-soft:#1F3A2B;
+    --route:#FF4FA5; --route-done:#6B7378; --me:#5FA3FF;
+    --ok:#5FCB8E; --ok-bg:#1D3527; --warn:#FF8A6A; --warn-bg:#3A1E16;
+    --shadow:0 10px 30px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#121715; --panel:#1B221E; --panel-2:#222B26; --fg:#E7ECE6; --muted:#98A59C; --line:#2E3933;
+  --accent:#4FB37A; --accent-fg:#0E1A12; --accent-soft:#1F3A2B;
+  --route:#FF4FA5; --route-done:#6B7378; --me:#5FA3FF;
+  --ok:#5FCB8E; --ok-bg:#1D3527; --warn:#FF8A6A; --warn-bg:#3A1E16;
+  --shadow:0 10px 30px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.4 var(--body);overflow:hidden;-webkit-text-size-adjust:100%;overscroll-behavior:none}
+button{font:inherit;color:inherit}
+#app{position:fixed;inset:0;overflow:hidden}
+#map{position:absolute;inset:0;background:var(--bg)}
+.leaflet-container{font:12px/1.3 var(--body)}
+.leaflet-control-attribution{font-size:10px;background:rgba(255,255,255,.75)}
+.leaflet-top.leaflet-right{top:calc(env(safe-area-inset-top,0px) + 58px)}
+.leaflet-bottom.leaflet-right{bottom:var(--sheet-h,280px)}
+
+/* Floating top bar */
+.topbar{position:absolute;left:0;right:0;top:0;z-index:600;display:flex;justify-content:space-between;align-items:center;gap:8px;
+  padding-top:calc(env(safe-area-inset-top,0px) + 10px);
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));pointer-events:none}
+.topbar > *{pointer-events:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel);color:var(--fg);border-radius:999px;padding:7px 12px;box-shadow:var(--shadow);font-size:13px;font-weight:600;white-space:nowrap;border:1px solid var(--line)}
+.brand{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.01em}
+.brand::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--route);display:inline-block;margin-right:7px;box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--route)}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.chip.gps-ok .dot{background:var(--ok)}
+.chip.gps-wait .dot{background:#E0A020;animation:pulse 1.2s infinite}
+.chip.gps-bad .dot{background:var(--warn)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Map controls */
+.map-controls{position:absolute;z-index:600;right:max(12px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 56px);display:flex;flex-direction:column;gap:8px}
+.icon-btn{width:44px;height:44px;border-radius:14px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);display:grid;place-items:center;cursor:pointer;padding:0}
+.icon-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.icon-btn.active{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+/* Banner + toast */
+.banner{position:absolute;z-index:700;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(var(--sheet-h,280px) + 12px);
+  background:var(--warn);color:#fff;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);font-weight:600;display:flex;gap:10px;align-items:center}
+.banner svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.toast{position:absolute;z-index:800;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h,280px) + 76px);max-width:min(92vw,420px);background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow);text-align:center}
+
+/* Bottom sheet */
+.sheet{position:absolute;z-index:650;left:0;right:0;bottom:0;background:var(--panel);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);
+  padding-top:10px;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+  padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+.grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
+.view{display:flex;flex-direction:column;gap:12px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.big{font-family:var(--display);font-weight:800;font-size:52px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:6px}
+.big small{font-size:22px;font-weight:700;color:var(--muted);letter-spacing:0}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row.between{justify-content:space-between}
+input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums}
+.chips button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.btn{border:0;border-radius:14px;padding:14px 18px;font-weight:700;font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:50px}
+.btn.primary{background:var(--accent);color:var(--accent-fg);flex:1}
+.btn.primary:disabled{opacity:.5;cursor:default}
+.btn.secondary{background:var(--panel-2);border:1px solid var(--line);color:var(--fg)}
+.btn.danger{background:var(--warn-bg);color:var(--warn);border:1px solid transparent}
+.btn.icon{padding:14px;min-width:50px}
+.btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.link{background:none;border:0;padding:4px 0;color:var(--muted);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-size:14px}
+.hint{color:var(--muted);font-size:13px;margin:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--panel-2);border-radius:12px;padding:10px 12px;min-width:0}
+.stat .l{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:var(--display);font-weight:700;font-size:clamp(17px,5.2vw,22px);line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap}
+.profile{width:100%;height:96px;display:block;background:var(--panel-2);border-radius:12px}
+.profile text{font:600 11px var(--body);fill:var(--muted)}
+.progress{height:8px;border-radius:4px;background:var(--panel-2);overflow:hidden}
+.progress > div{height:100%;width:0;background:var(--route);border-radius:4px;transition:width .4s}
+.status-pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;background:var(--ok-bg);color:var(--ok)}
+.status-pill.off{background:var(--warn-bg);color:var(--warn)}
+.status-pill .dot{width:9px;height:9px;border-radius:50%;background:currentColor}
+.walk-nums{display:flex;justify-content:space-between;align-items:baseline;font-variant-numeric:tabular-nums}
+.walk-nums b{font-family:var(--display);font-size:30px;font-weight:800;letter-spacing:-.01em}
+.walk-nums span{color:var(--muted);font-weight:600}
+.progress-txt{font-size:14px;color:var(--muted);font-weight:600}
+.spinner{width:18px;height:18px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Map markers */
+.start-pin{width:22px;height:22px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);display:grid;place-items:center;color:#fff;font:800 11px var(--display)}
+.arrow{width:0;height:0}
+.arrow svg{width:18px;height:18px;display:block;transform-origin:50% 50%;margin:-9px 0 0 -9px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))}
+.me-wrap{position:relative;width:0;height:0}
+.me-cone{position:absolute;left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;transform-origin:50% 50%;
+  background:conic-gradient(from -30deg, rgba(23,105,224,.35) 0deg 60deg, transparent 60deg 360deg);display:none}
+.me-cone.show{display:block}
+.me-dot{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:var(--me);border:3px solid #fff;box-shadow:0 0 0 2px rgba(23,105,224,.35),0 2px 6px rgba(0,0,0,.4)}
+.leaflet-div-icon{background:transparent;border:0}
+
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+@media (max-height:620px){.big{font-size:40px}.profile{height:72px}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map" role="application" aria-label="Map"></div>
+
+  <div class="topbar">
+    <div class="chip brand">Round Here</div>
+    <div class="chip gps-wait" id="gpsChip"><span class="dot"></span><span id="gpsText">Locating…</span></div>
+  </div>
+
+  <div class="map-controls">
+    <button class="icon-btn" id="btnLocate" aria-label="Centre on my location" title="My location">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+    <button class="icon-btn" id="btnLayer" aria-label="Switch map style" title="Map style">
+      <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
+    </button>
+  </div>
+
+  <div class="banner" id="banner" hidden>
+    <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+    <span id="bannerText">Off route</span>
+  </div>
+  <div class="toast" id="toast" hidden role="status"></div>
+
+  <section class="sheet" id="sheet">
+    <div class="grip"></div>
+
+    <!-- PLAN -->
+    <div class="view" id="viewPlan">
+      <div class="row between">
+        <div class="eyebrow">How far today?</div>
+        <div class="eyebrow" id="startLabel">Starting from your location</div>
+      </div>
+      <div class="big"><span id="distBig">8.0</span><small>km</small></div>
+      <input type="range" id="distRange" min="2" max="30" step="0.5" value="8" aria-label="Distance in kilometres">
+      <div class="chips" id="distChips">
+        <button data-km="3">3 km</button><button data-km="5">5 km</button><button data-km="8" class="on">8 km</button>
+        <button data-km="12">12 km</button><button data-km="20">20 km</button>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btnGo" disabled>Make me a loop</button>
+      </div>
+      <p class="hint" id="planHint">Starts and ends right where you are. Long-press the map to start somewhere else.</p>
+    </div>
+
+    <!-- ROUTE -->
+    <div class="view" id="viewRoute" hidden>
+      <div class="row between">
+        <div class="eyebrow">Your loop</div>
+        <button class="link" id="btnBack">Change distance</button>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="l">Distance</div><div class="v" id="stDist">—</div></div>
+        <div class="stat"><div class="l">Ascent</div><div class="v" id="stAsc">—</div></div>
+        <div class="stat"><div class="l">Est. time</div><div class="v" id="stTime">—</div></div>
+      </div>
+      <svg class="profile" id="profile" aria-label="Elevation profile"></svg>
+      <div class="row">
+        <button class="btn primary" id="btnStart">Start walking</button>
+        <button class="btn secondary" id="btnShuffle" title="Different loop, same distance">
+          <svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>Shuffle
+        </button>
+        <button class="btn secondary icon" id="btnGpx" aria-label="Export GPX" title="Export GPX">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>
+        </button>
+      </div>
+      <p class="hint" id="routeHint"></p>
+    </div>
+
+    <!-- WALK -->
+    <div class="view" id="viewWalk" hidden>
+      <div class="row between">
+        <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Waiting for GPS</span></div>
+        <button class="link" id="btnRecentre" hidden>Re-centre</button>
+      </div>
+      <div class="walk-nums"><div><b id="wDone">0.0</b> <span>km done</span></div><div><span id="wLeft">— to go</span></div></div>
+      <div class="progress"><div id="progBar"></div></div>
+      <div class="row between">
+        <div class="progress-txt" id="wEta">—</div>
+        <button class="btn danger" id="btnStop">Stop</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(() => {
+'use strict';
+/*PURE-START*/
+const EARTH_R = 6371008.8;
+const rad = d => d * Math.PI / 180;
+const deg = r => r * 180 / Math.PI;
+
+function haversine(a, b) {
+  const dLat = rad(b[0] - a[0]), dLon = rad(b[1] - a[1]);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+function destination(p, bearingDeg, distM) {
+  const lat1 = rad(p[0]), lon1 = rad(p[1]), br = rad(bearingDeg), d = distM / EARTH_R;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(br));
+  const lon2 = lon1 + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return [deg(lat2), ((deg(lon2) + 540) % 360) - 180];
+}
+function bearingBetween(a, b) {
+  const y = Math.sin(rad(b[1] - a[1])) * Math.cos(rad(b[0]));
+  const x = Math.cos(rad(a[0])) * Math.sin(rad(b[0])) - Math.sin(rad(a[0])) * Math.cos(rad(b[0])) * Math.cos(rad(b[1] - a[1]));
+  return (deg(Math.atan2(y, x)) + 360) % 360;
+}
+function cumulative(coords) {
+  const c = new Array(coords.length); c[0] = 0;
+  for (let i = 1; i < coords.length; i++) c[i] = c[i - 1] + haversine(coords[i - 1], coords[i]);
+  return c;
+}
+// Position along the route at cumulative distance d (metres).
+function pointAt(coords, cum, d) {
+  if (d <= 0) return coords[0];
+  const n = coords.length;
+  if (d >= cum[n - 1]) return coords[n - 1];
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= d) lo = mid; else hi = mid; }
+  const seg = cum[hi] - cum[lo], t = seg > 0 ? (d - cum[lo]) / seg : 0;
+  return [coords[lo][0] + t * (coords[hi][0] - coords[lo][0]), coords[lo][1] + t * (coords[hi][1] - coords[lo][1])];
+}
+function resample(coords, cum, step) {
+  const total = cum[cum.length - 1], pts = [], ds = [];
+  for (let d = 0; d < total; d += step) { pts.push(pointAt(coords, cum, d)); ds.push(d); }
+  pts.push(coords[coords.length - 1]); ds.push(total);
+  return { pts, ds };
+}
+// Local flat projection in metres around an origin.
+function localProjector(origin) {
+  const k = Math.cos(rad(origin[0])) * EARTH_R * Math.PI / 180, ky = EARTH_R * Math.PI / 180;
+  return p => [(p[1] - origin[1]) * k, (p[0] - origin[0]) * ky];
+}
+// Fraction of evenly spaced route points that revisit a 30 m cell seen much earlier (out-and-back).
+function overlapFraction(pts) {
+  if (pts.length < 10) return 0;
+  const proj = localProjector(pts[0]), cell = 30, seen = new Map(), n = pts.length, gap = Math.max(10, Math.floor(n * 0.05));
+  let over = 0;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = proj(pts[i]);
+    const k = Math.floor(x / cell) + ',' + Math.floor(y / cell);
+    const prev = seen.get(k);
+    if (prev === undefined) seen.set(k, i);
+    else if (i - prev > gap) over++;
+  }
+  return over / n;
+}
+// Nearest point on the polyline xy (array of [x,y]) within segment index range [from,to).
+function nearestOnRoute(xy, p, from, to) {
+  let best = { dist: Infinity, idx: -1, t: 0, point: null };
+  const start = Math.max(0, from), end = Math.min(xy.length - 1, to);
+  for (let i = start; i < end; i++) {
+    const a = xy[i], b = xy[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+    let t = len2 ? ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const qx = a[0] + t * dx, qy = a[1] + t * dy, d = Math.hypot(p[0] - qx, p[1] - qy);
+    if (d < best.dist) best = { dist: d, idx: i, t, point: [qx, qy] };
+  }
+  return best;
+}
+function smooth(arr, w) {
+  const out = new Array(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    let s = 0, c = 0;
+    for (let j = Math.max(0, i - w); j <= Math.min(arr.length - 1, i + w); j++) { s += arr[j]; c++; }
+    out[i] = s / c;
+  }
+  return out;
+}
+// Total climb/descent with a 3 m hysteresis so DEM noise doesn't add up.
+function ascentDescent(eles) {
+  if (!eles || eles.length < 2) return { up: 0, down: 0 };
+  const e = smooth(eles, 1), thr = 3;
+  let up = 0, down = 0, anchor = e[0], dir = 0, extreme = e[0];
+  for (let i = 1; i < e.length; i++) {
+    const v = e[i];
+    if (dir === 0) {
+      if (v >= anchor + thr) { dir = 1; extreme = v; }
+      else if (v <= anchor - thr) { dir = -1; extreme = v; }
+      continue;
+    }
+    if (dir === 1) {
+      if (v > extreme) extreme = v;
+      else if (extreme - v >= thr) { up += extreme - anchor; anchor = extreme; dir = -1; extreme = v; }
+    } else {
+      if (v < extreme) extreme = v;
+      else if (v - extreme >= thr) { down += anchor - extreme; anchor = extreme; dir = 1; extreme = v; }
+    }
+  }
+  if (dir === 1) up += extreme - anchor; else if (dir === -1) down += anchor - extreme;
+  return { up: Math.round(up), down: Math.round(down) };
+}
+function interpProfile(ds, ele, d) {
+  if (!ele || !ele.length) return null;
+  if (d <= ds[0]) return ele[0];
+  if (d >= ds[ds.length - 1]) return ele[ele.length - 1];
+  let lo = 0, hi = ds.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (ds[mid] <= d) lo = mid; else hi = mid; }
+  const t = (d - ds[lo]) / (ds[hi] - ds[lo] || 1);
+  return ele[lo] + t * (ele[hi] - ele[lo]);
+}
+// Naismith-style: 4.5 km/h plus an hour per 600 m of climb.
+function estimateMinutes(metres, ascent) { return Math.round((metres / 4500 + (ascent || 0) / 600) * 60); }
+function fmtKm(m, dp) { return (m / 1000).toFixed(dp == null ? 1 : dp); }
+function fmtTime(min) {
+  if (min < 60) return min + ' min';
+  const h = Math.floor(min / 60), m = min % 60;
+  return m ? h + ' h ' + String(m).padStart(2, '0') : h + ' h';
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+// Start sits ON the circle; K-1 further points spread round the centre.
+function planWaypoints(start, r, bearingDeg, clockwise, K, jitter) {
+  const centre = destination(start, bearingDeg, r), startAngle = (bearingDeg + 180) % 360, pts = [start];
+  for (let i = 1; i < K; i++) {
+    const ang = startAngle + (clockwise ? 1 : -1) * i * (360 / K) + jitter[i].a;
+    pts.push(destination(centre, ang, r * jitter[i].r));
+  }
+  pts.push(start);
+  return pts;
+}
+function escapeXml(s) { return String(s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]); }
+function buildGpx(name, coords, cum, profile) {
+  const lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+    '<gpx version="1.1" creator="Round Here" xmlns="http://www.topografix.com/GPX/1/1">',
+    '<metadata><name>' + escapeXml(name) + '</name><time>' + new Date().toISOString() + '</time></metadata>',
+    '<trk><name>' + escapeXml(name) + '</name><trkseg>'];
+  for (let i = 0; i < coords.length; i++) {
+    const e = profile ? interpProfile(profile.ds, profile.ele, cum[i]) : null;
+    lines.push('<trkpt lat="' + coords[i][0].toFixed(6) + '" lon="' + coords[i][1].toFixed(6) + '">' + (e == null ? '' : '<ele>' + e.toFixed(1) + '</ele>') + '</trkpt>');
+  }
+  lines.push('</trkseg></trk></gpx>');
+  return lines.join('\n');
+}
+/*PURE-END*/
+
+// ---------- Network ----------
+const ROUTER = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/';
+class RouteError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
+function timeoutSignal(ms) { try { return AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined; } catch (e) { return undefined; } }
+
+async function osrmRoute(points) {
+  const coordStr = points.map(p => p[1].toFixed(6) + ',' + p[0].toFixed(6)).join(';');
+  const url = ROUTER + coordStr + '?overview=full&geometries=geojson&steps=false&alternatives=false';
+  let res;
+  try { res = await fetch(url, { signal: timeoutSignal(20000) }); }
+  catch (e) { throw new RouteError('network', 'Could not reach the routing service. Check your signal and try again.'); }
+  if (res.status === 429) throw new RouteError('http', 'The routing service is busy. Wait a minute and try again.');
+  if (!res.ok) throw new RouteError('http', 'Routing service error (' + res.status + ').');
+  let j;
+  try { j = await res.json(); } catch (e) { throw new RouteError('http', 'The routing service sent an unreadable reply. Try again.'); }
+  if (j.code !== 'Ok' || !j.routes || !j.routes[0]) throw new RouteError('noroute', 'No route');
+  const r = j.routes[0];
+  return { coords: r.geometry.coordinates.map(c => [c[1], c[0]]), distance: r.distance };
+}
+
+async function fetchElevation(pts) {
+  const out = [];
+  for (let i = 0; i < pts.length; i += 100) {
+    const chunk = pts.slice(i, i + 100);
+    const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + chunk.map(p => p[0].toFixed(5)).join(',') + '&longitude=' + chunk.map(p => p[1].toFixed(5)).join(',');
+    const res = await fetch(url, { signal: timeoutSignal(15000) });
+    if (!res.ok) throw new Error('elevation ' + res.status);
+    const j = await res.json();
+    if (!j.elevation) throw new Error('elevation payload');
+    out.push(...j.elevation);
+  }
+  return out;
+}
+
+// Grow or shrink a circle of waypoints until the routed loop lands near the target length.
+async function generateLoop(start, targetM, seed, onProgress) {
+  const rng = mulberry32(seed);
+  let bearingDeg = rng() * 360, clockwise = rng() < 0.5;
+  const K = targetM <= 5000 ? 4 : targetM <= 12000 ? 5 : 6;
+  const MAX_CALLS = 6;
+  let calls = 0, best = null;
+  for (let pass = 0; pass < 2 && calls < MAX_CALLS; pass++) {
+    const jitter = Array.from({ length: K }, () => ({ r: 0.85 + 0.3 * rng(), a: (rng() - 0.5) * 24 }));
+    let r = targetM / (2 * Math.PI) * 0.8;
+    for (let attempt = 0; attempt < 4 && calls < MAX_CALLS; attempt++) {
+      calls++; onProgress && onProgress(calls, MAX_CALLS);
+      const wps = planWaypoints(start, r, bearingDeg, clockwise, K, jitter);
+      let res;
+      try { res = await osrmRoute(wps); }
+      catch (e) { if (e.kind === 'noroute') { bearingDeg = (bearingDeg + 75) % 360; continue; } throw e; }
+      const cum = cumulative(res.coords), total = cum[cum.length - 1];
+      if (total < 100) { bearingDeg = (bearingDeg + 75) % 360; continue; }
+      const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
+      const err = Math.abs(total - targetM) / targetM;
+      const score = err + 0.6 * Math.max(0, overlap - 0.08);
+      const cand = { coords: res.coords, cum, total, overlap, err, score, seed };
+      if (!best || score < best.score) best = cand;
+      if (err < 0.06) break;
+      r = Math.min(25000, Math.max(150, r * Math.pow(targetM / total, 0.9)));
+    }
+    if (best && best.overlap < 0.3 && best.err < 0.15) break;
+    bearingDeg = (bearingDeg + 90 + rng() * 180) % 360; clockwise = !clockwise;
+  }
+  if (!best) throw new RouteError('noroute', 'No walkable loop found from here. Try another distance, or shuffle.');
+  return best;
+}
+
+// ---------- Storage ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('rh.v1.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('rh.v1.' + k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem('rh.v1.' + k); } catch (e) {} }
+};
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const el = {
+  gpsChip: $('gpsChip'), gpsText: $('gpsText'), btnLocate: $('btnLocate'), btnLayer: $('btnLayer'),
+  banner: $('banner'), bannerText: $('bannerText'), toast: $('toast'), sheet: $('sheet'),
+  viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
+  distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
+  stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
+  statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop')
+};
+
+let toastTimer = null;
+function toast(msg, ms) {
+  el.toast.textContent = msg; el.toast.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.toast.hidden = true; }, ms || 3500);
+}
+function setSheetHeight() {
+  document.documentElement.style.setProperty('--sheet-h', el.sheet.offsetHeight + 'px');
+}
+function showView(name) {
+  el.viewPlan.hidden = name !== 'plan'; el.viewRoute.hidden = name !== 'route'; el.viewWalk.hidden = name !== 'walk';
+  state.mode = name;
+  requestAnimationFrame(setSheetHeight);
+}
+
+// ---------- Map ----------
+const layers = {
+  osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }),
+  topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, subdomains: 'abc', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM | &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)' })
+};
+const map = L.map('map', { zoomControl: false, attributionControl: true, tapHold: true });
+map.attributionControl.setPosition('bottomright');
+const lastPos = store.get('lastPos', null);
+map.setView(lastPos || [54.3, -2.5], lastPos ? 14 : 6);
+let layerName = store.get('layer', 'osm');
+layers[layerName].addTo(map);
+
+const routeGroup = L.layerGroup().addTo(map);
+let startMarker = null, meMarker = null, accCircle = null, doneLine = null, restLine = null;
+
+function startIcon() { return L.divIcon({ className: '', html: '<div class="start-pin">S</div>', iconSize: [22, 22], iconAnchor: [11, 11] }); }
+function arrowIcon(b) {
+  return L.divIcon({ className: 'arrow', html: '<svg viewBox="0 0 24 24" style="transform:rotate(' + b.toFixed(0) + 'deg)"><path d="M12 3l7 14-7-4-7 4z" fill="#fff" stroke="' + getRouteColor() + '" stroke-width="2" stroke-linejoin="round"/></svg>', iconSize: [0, 0], iconAnchor: [0, 0] });
+}
+function getRouteColor() { return getComputedStyle(document.documentElement).getPropertyValue('--route').trim() || '#D1237A'; }
+function getDoneColor() { return getComputedStyle(document.documentElement).getPropertyValue('--route-done').trim() || '#8C949A'; }
+
+function drawRoute(route) {
+  routeGroup.clearLayers(); doneLine = restLine = null;
+  const latlngs = route.coords;
+  L.polyline(latlngs, { color: '#fff', weight: 9, opacity: .9, lineJoin: 'round', lineCap: 'round' }).addTo(routeGroup);
+  doneLine = L.polyline([], { color: getDoneColor(), weight: 5, opacity: .95, lineJoin: 'round', lineCap: 'round' }).addTo(routeGroup);
+  restLine = L.polyline(latlngs, { color: getRouteColor(), weight: 5, opacity: .95, lineJoin: 'round', lineCap: 'round' }).addTo(routeGroup);
+  const n = Math.min(12, Math.max(5, Math.round(route.total / 700)));
+  for (let i = 1; i < n; i++) {
+    const d = route.total * i / n, a = pointAt(route.coords, route.cum, d), b = pointAt(route.coords, route.cum, Math.min(route.total, d + 25));
+    L.marker(a, { icon: arrowIcon(bearingBetween(a, b)), interactive: false, keyboard: false }).addTo(routeGroup);
+  }
+  if (startMarker) startMarker.remove();
+  startMarker = L.marker(latlngs[0], { icon: startIcon(), interactive: false, keyboard: false, zIndexOffset: 500 }).addTo(map);
+}
+function fitRoute(route) {
+  setSheetHeight();
+  const b = L.latLngBounds(route.coords);
+  map.fitBounds(b, { paddingTopLeft: [24, 64], paddingBottomRight: [24, el.sheet.offsetHeight + 24], animate: false });
+}
+function placeStartMarker(p) {
+  if (startMarker) startMarker.remove();
+  startMarker = L.marker(p, { icon: startIcon(), interactive: false, keyboard: false, zIndexOffset: 500 }).addTo(map);
+}
+
+function updateMeMarker(p, acc, heading) {
+  if (!meMarker) {
+    meMarker = L.marker(p, { icon: L.divIcon({ className: '', html: '<div class="me-wrap"><div class="me-cone"></div><div class="me-dot"></div></div>', iconSize: [0, 0], iconAnchor: [0, 0] }), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(map);
+    accCircle = L.circle(p, { radius: acc || 0, color: '#1769E0', weight: 1, opacity: .4, fillColor: '#1769E0', fillOpacity: .12, interactive: false }).addTo(map);
+  } else { meMarker.setLatLng(p); accCircle.setLatLng(p); accCircle.setRadius(acc || 0); }
+  const cone = meMarker.getElement() && meMarker.getElement().querySelector('.me-cone');
+  if (cone) {
+    if (heading != null && !isNaN(heading)) { cone.classList.add('show'); cone.style.transform = 'rotate(' + heading.toFixed(0) + 'deg)'; }
+    else cone.classList.remove('show');
+  }
+}
+
+// ---------- State ----------
+const state = {
+  mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
+  walk: null, watchId: null, following: true, lastFix: null, lastHeading: null
+};
+el.distRange.value = state.targetKm;
+
+function setDistance(km, fromSlider) {
+  state.targetKm = km; store.set('distance', km);
+  el.distBig.textContent = km.toFixed(1);
+  if (!fromSlider) el.distRange.value = km;
+  el.distChips.querySelectorAll('button').forEach(b => b.classList.toggle('on', Number(b.dataset.km) === km));
+}
+setDistance(state.targetKm);
+el.distRange.addEventListener('input', () => setDistance(Number(el.distRange.value), true));
+el.distChips.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setDistance(Number(b.dataset.km)); });
+
+function setStart(p, mode, acc) {
+  state.start = { p, mode, acc };
+  placeStartMarker(p);
+  el.btnGo.disabled = state.busy;
+  el.startLabel.textContent = mode === 'gps' ? 'Starting from your location' : 'Starting from the pin';
+  el.planHint.textContent = mode === 'gps' ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
+}
+
+// ---------- GPS ----------
+function setGps(status, text) { el.gpsChip.className = 'chip ' + status; el.gpsText.textContent = text; }
+
+function locateOnce(opts) {
+  opts = opts || {};
+  if (!('geolocation' in navigator)) { setGps('gps-bad', 'No GPS on this device'); return; }
+  setGps('gps-wait', 'Locating…');
+  navigator.geolocation.getCurrentPosition(pos => {
+    const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
+    state.lastFix = { p, acc, t: Date.now() };
+    store.set('lastPos', p);
+    setGps('gps-ok', 'GPS ±' + acc + ' m');
+    updateMeMarker(p, acc, null);
+    if (state.mode === 'plan' && (!state.start || state.start.mode === 'gps' || opts.force)) setStart(p, 'gps', acc);
+    if (opts.centre || state.mode === 'plan') map.setView(p, Math.max(map.getZoom(), 15), { animate: false });
+  }, err => {
+    const msg = err.code === 1 ? 'Location blocked — allow it in your browser settings, or long-press the map to set a start.'
+      : err.code === 3 ? 'GPS timed out — try again outside, or long-press the map to set a start.'
+      : 'No location yet — long-press the map to set a start.';
+    setGps('gps-bad', err.code === 1 ? 'Location blocked' : 'No location');
+    toast(msg, 6000);
+  }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 20000 });
+}
+el.btnLocate.addEventListener('click', () => {
+  if (state.mode === 'walk') { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); return; }
+  locateOnce({ centre: true, force: true });
+});
+map.on('contextmenu', e => {
+  if (state.mode !== 'plan') return;
+  setStart([e.latlng.lat, e.latlng.lng], 'manual');
+  toast('Start moved to the pin');
+});
+
+el.btnLayer.addEventListener('click', () => {
+  map.removeLayer(layers[layerName]);
+  layerName = layerName === 'osm' ? 'topo' : 'osm';
+  layers[layerName].addTo(map); store.set('layer', layerName);
+  toast(layerName === 'topo' ? 'Topographic map' : 'Street map');
+});
+
+// ---------- Generate ----------
+async function makeLoop(seed) {
+  if (!state.start || state.busy) return;
+  state.busy = true;
+  const targetM = state.targetKm * 1000;
+  const label = el.btnGo.innerHTML;
+  el.btnGo.disabled = true; el.btnShuffle.disabled = true;
+  el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths…';
+  el.btnShuffle.innerHTML = '<span class="spinner"></span> Shuffling';
+  try {
+    const route = await generateLoop(state.start.p, targetM, seed, (n, max) => { el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths… ' + n + '/' + max; });
+    route.startMode = state.start.mode; route.createdAt = Date.now(); route.profile = null; route.ascent = null; route.descent = null;
+    state.route = route;
+    drawRoute(route); showView('route'); renderRouteStats(); fitRoute(route);
+    store.set('route', serializeRoute(route));
+    loadElevation(route);
+  } catch (e) {
+    toast(e.message || 'Something went wrong making the loop.', 6000);
+  } finally {
+    state.busy = false;
+    el.btnGo.innerHTML = label; el.btnGo.disabled = !state.start;
+    el.btnShuffle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>Shuffle';
+    el.btnShuffle.disabled = false;
+  }
+}
+function serializeRoute(r) {
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent };
+}
+function reviveRoute(s) {
+  if (!s || !s.coords || s.coords.length < 2) return null;
+  const cum = cumulative(s.coords);
+  return Object.assign({}, s, { cum, total: cum[cum.length - 1] });
+}
+async function loadElevation(route) {
+  try {
+    const step = Math.max(50, route.total / 180);
+    const { pts, ds } = resample(route.coords, route.cum, step);
+    const ele = await fetchElevation(pts);
+    if (state.route !== route) return;
+    route.profile = { ds, ele }; const ad = ascentDescent(ele); route.ascent = ad.up; route.descent = ad.down;
+    store.set('route', serializeRoute(route));
+    renderRouteStats();
+  } catch (e) {
+    if (state.route === route) { el.stAsc.textContent = 'n/a'; el.routeHint.textContent = 'Elevation unavailable right now (no signal?). Everything else still works.'; renderProfile(null); }
+  }
+}
+function renderRouteStats() {
+  const r = state.route; if (!r) return;
+  el.stDist.textContent = fmtKm(r.total) + ' km';
+  el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
+  el.stTime.textContent = '~' + fmtTime(estimateMinutes(r.total, r.ascent || 0));
+  el.routeHint.textContent = r.overlap > 0.3 ? 'Some of this loop doubles back on itself. Shuffle for a different shape.' : (r.err > 0.12 ? 'Closest loop the paths here allow; the length is ' + (r.total > state.targetKm * 1000 ? 'longer' : 'shorter') + ' than you asked for.' : '');
+  renderProfile(null);
+}
+function renderProfile(progress) {
+  const r = state.route, svg = el.profile;
+  const W = Math.max(280, svg.clientWidth || 320), H = svg.clientHeight || 96;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  if (!r || !r.profile) { svg.innerHTML = '<text x="' + (W / 2) + '" y="' + (H / 2 + 4) + '" text-anchor="middle">' + (r && r.ascent === null && el.stAsc.textContent === '…' ? 'Loading elevation…' : 'No elevation data') + '</text>'; return; }
+  const ds = r.profile.ds, ele = smooth(r.profile.ele, 1), total = r.total;
+  let mn = Math.min(...ele), mx = Math.max(...ele);
+  if (mx - mn < 20) { const mid = (mx + mn) / 2; mn = mid - 10; mx = mid + 10; }
+  const padL = 8, padR = 8, padT = 20, padB = 16;
+  const sx = d => padL + (d / total) * (W - padL - padR), sy = e => padT + (1 - (e - mn) / (mx - mn)) * (H - padT - padB);
+  let path = 'M' + sx(0).toFixed(1) + ' ' + sy(ele[0]).toFixed(1);
+  for (let i = 1; i < ele.length; i++) path += 'L' + sx(ds[i]).toFixed(1) + ' ' + sy(ele[i]).toFixed(1);
+  const area = path + 'L' + sx(total).toFixed(1) + ' ' + (H - padB) + 'L' + sx(0).toFixed(1) + ' ' + (H - padB) + 'Z';
+  const col = getRouteColor();
+  let out = '<path d="' + area + '" fill="' + col + '" fill-opacity="0.18"/>' +
+    '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round"/>' +
+    '<text x="' + padL + '" y="14">' + Math.round(mx) + ' m</text>' +
+    '<text x="' + (W - padR) + '" y="14" text-anchor="end">↓ ' + (r.descent == null ? '–' : r.descent) + ' m</text>' +
+    '<text x="' + padL + '" y="' + (H - 4) + '">' + Math.round(mn) + ' m</text>' +
+    '<text x="' + (W - padR) + '" y="' + (H - 4) + '" text-anchor="end">' + fmtKm(total) + ' km</text>';
+  if (progress != null) {
+    const x = sx(Math.min(total, Math.max(0, progress))).toFixed(1);
+    out += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H - padB) + '" stroke="' + col + '" stroke-width="2" stroke-dasharray="3 3"/>';
+  }
+  svg.innerHTML = out;
+}
+
+el.btnGo.addEventListener('click', () => makeLoop((Math.random() * 1e9) | 0));
+el.btnShuffle.addEventListener('click', () => makeLoop((Math.random() * 1e9) | 0));
+el.btnBack.addEventListener('click', () => {
+  showView('plan');
+  if (!state.start || state.start.mode === 'gps') locateOnce({ centre: true, force: true });
+  else map.setView(state.start.p, Math.max(map.getZoom(), 14), { animate: false });
+});
+
+// ---------- GPX ----------
+async function exportGpx() {
+  const r = state.route; if (!r) return;
+  const d = new Date(), stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const name = 'Loop ' + fmtKm(r.total) + ' km ' + stamp, fname = 'loop-' + fmtKm(r.total) + 'km-' + stamp + '.gpx';
+  const gpx = buildGpx(name, r.coords, r.cum, r.profile);
+  try {
+    const file = new File([gpx], fname, { type: 'application/gpx+xml' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  try {
+    const url = URL.createObjectURL(new Blob([gpx], { type: 'application/gpx+xml' }));
+    const a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+    toast('GPX downloaded');
+  } catch (e) { toast('Could not export the GPX on this browser.'); }
+}
+el.btnGpx.addEventListener('click', exportGpx);
+
+// ---------- Walk ----------
+let wakeLock = null, audioCtx = null;
+async function keepAwake(on) {
+  try {
+    if (on && 'wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) { wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.mode === 'walk') keepAwake(true); });
+function unlockAudio() { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} }
+function beep(times) {
+  if (!audioCtx) return;
+  try {
+    const t0 = audioCtx.currentTime;
+    for (let i = 0; i < times; i++) {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type = 'sine'; o.frequency.value = i % 2 ? 660 : 880;
+      o.connect(g); g.connect(audioCtx.destination);
+      const s = t0 + i * 0.28; g.gain.setValueAtTime(0.0001, s); g.gain.exponentialRampToValueAtTime(0.35, s + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, s + 0.22);
+      o.start(s); o.stop(s + 0.24);
+    }
+  } catch (e) {}
+}
+function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {} }
+
+function startWalk(resume) {
+  const r = state.route; if (!r) return;
+  if (!('geolocation' in navigator)) { toast('This device has no location access, so live tracking is not possible.'); return; }
+  const proj = localProjector(r.coords[0]);
+  const saved = resume ? store.get('walk', null) : null;
+  state.walk = { proj, xy: r.coords.map(proj), progress: saved ? saved.progress : 0, lastIdx: 0, offCount: 0, onCount: 0, off: false, startedAt: saved ? saved.startedAt : Date.now(), finished: false };
+  state.following = true; el.btnRecentre.hidden = true;
+  unlockAudio(); keepAwake(true);
+  showView('walk'); updateWalkUi(null);
+  store.set('walk', { active: true, progress: state.walk.progress, startedAt: state.walk.startedAt });
+  setStatus('wait', 'Waiting for GPS');
+  if (state.watchId != null) navigator.geolocation.clearWatch(state.watchId);
+  state.watchId = navigator.geolocation.watchPosition(onFix, err => {
+    setGps('gps-bad', err.code === 1 ? 'Location blocked' : 'No location');
+    setStatus('off', err.code === 1 ? 'Location blocked' : 'Searching for GPS');
+  }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 });
+  if (state.lastFix) map.setView(state.lastFix.p, 16, { animate: false });
+}
+function stopWalk() {
+  if (state.watchId != null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
+  keepAwake(false); store.del('walk'); state.walk = null;
+  el.banner.hidden = true;
+  if (doneLine && restLine && state.route) { doneLine.setLatLngs([]); restLine.setLatLngs(state.route.coords); }
+  showView('route'); renderRouteStats(); fitRoute(state.route);
+  el.btnStart.textContent = 'Start walking'; el.btnStart.dataset.resume = '0';
+}
+function setStatus(kind, text) { el.statusPill.className = 'status-pill' + (kind === 'off' ? ' off' : ''); el.statusText.textContent = text; }
+
+function onFix(pos) {
+  const w = state.walk, r = state.route; if (!w || !r) return;
+  const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
+  state.lastFix = { p, acc, t: Date.now() }; store.set('lastPos', p);
+  setGps('gps-ok', 'GPS ±' + acc + ' m');
+  const speed = pos.coords.speed, hd = pos.coords.heading;
+  if (hd != null && !isNaN(hd) && (speed == null || speed > 0.4)) state.lastHeading = hd;
+  updateMeMarker(p, acc, state.lastHeading);
+  if (state.following) { map.setView(p, w.zoomSet ? map.getZoom() : 16, { animate: false }); w.zoomSet = true; }
+
+  // Project onto the route: look near the expected position first so the start/finish overlap doesn't confuse progress.
+  const xy = w.xy, q = w.proj(p);
+  const thr = Math.max(35, acc * 1.2 + 10);
+  const cum = r.cum;
+  let lo = w.lastIdx, hi = w.lastIdx;
+  while (lo > 0 && cum[w.lastIdx] - cum[lo] < 800) lo--;
+  while (hi < cum.length - 1 && cum[hi] - cum[w.lastIdx] < 2500) hi++;
+  let near = nearestOnRoute(xy, q, lo, hi);
+  if (near.dist > thr) { const g = nearestOnRoute(xy, q, 0, xy.length - 1); if (g.dist <= thr) near = g; }
+  if (near.idx >= 0 && near.dist <= thr) {
+    const prog = cum[near.idx] + near.t * (cum[near.idx + 1] - cum[near.idx]);
+    if (prog >= w.progress - 150) { w.progress = Math.max(w.progress, prog); w.lastIdx = near.idx; }
+    w.onCount++; w.offCount = 0;
+    if (w.off && w.onCount >= 2) { w.off = false; el.banner.hidden = true; buzz(80); }
+    if (!w.off) setStatus('ok', 'On route');
+    const cut = pointAt(r.coords, cum, w.progress);
+    doneLine.setLatLngs(r.coords.slice(0, w.lastIdx + 1).concat([cut]));
+    restLine.setLatLngs([cut].concat(r.coords.slice(w.lastIdx + 1)));
+    if (!w.finished && w.progress > r.total * 0.85 && (r.total - w.progress < 60 || haversine(p, r.coords[0]) < 40) && haversine(p, r.coords[0]) < 60) {
+      w.finished = true; setStatus('ok', 'Loop complete'); buzz([150, 80, 150, 80, 300]); beep(3);
+      toast('Loop done: ' + fmtKm(r.total) + ' km in ' + fmtTime(Math.round((Date.now() - w.startedAt) / 60000)), 8000);
+    }
+  } else {
+    w.offCount++; w.onCount = 0;
+    const d = Math.round(near.dist);
+    setStatus('off', 'Off route · ' + d + ' m');
+    if (!w.off && w.offCount >= 2) { w.off = true; el.banner.hidden = false; el.bannerText.textContent = 'Off route — ' + d + ' m from the line. Head back towards it.'; buzz([250, 120, 250]); beep(2); }
+    else if (w.off) el.bannerText.textContent = 'Off route — ' + d + ' m from the line. Head back towards it.';
+  }
+  store.set('walk', { active: true, progress: w.progress, startedAt: w.startedAt });
+  updateWalkUi(w.progress);
+}
+function updateWalkUi(progress) {
+  const r = state.route, w = state.walk; if (!r || !w) return;
+  const done = progress == null ? w.progress : progress, left = Math.max(0, r.total - done);
+  el.wDone.textContent = fmtKm(done);
+  el.wLeft.textContent = fmtKm(left) + ' km to go';
+  el.progBar.style.width = Math.min(100, done / r.total * 100).toFixed(1) + '%';
+  let ascLeft = 0;
+  if (r.profile) {
+    const ds = r.profile.ds, e = r.profile.ele; let i = 0; while (i < ds.length - 1 && ds[i] < done) i++;
+    ascLeft = ascentDescent(e.slice(Math.max(0, i - 1))).up;
+  }
+  const mins = estimateMinutes(left, ascLeft), elapsed = Math.round((Date.now() - w.startedAt) / 60000);
+  el.wEta.textContent = '~' + fmtTime(mins) + ' left · ' + fmtTime(elapsed) + ' so far';
+}
+el.btnStart.addEventListener('click', () => startWalk(el.btnStart.dataset.resume === '1'));
+el.btnStop.addEventListener('click', stopWalk);
+el.btnRecentre.addEventListener('click', () => { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); });
+map.on('dragstart', () => { if (state.mode === 'walk') { state.following = false; el.btnRecentre.hidden = false; } });
+
+// ---------- Boot ----------
+window.addEventListener('resize', () => { setSheetHeight(); if (state.mode === 'route') renderProfile(null); });
+window.addEventListener('orientationchange', () => setTimeout(() => map.invalidateSize(), 300));
+setSheetHeight();
+
+let savedRoute = reviveRoute(store.get('route', null));
+const savedWalk = store.get('walk', null);
+// A loop from a previous day is stale unless a walk on it is still in progress.
+if (savedRoute && !(savedWalk && savedWalk.active) && Date.now() - (savedRoute.createdAt || 0) > 12 * 3600 * 1000) { store.del('route'); savedRoute = null; }
+if (savedRoute) {
+  state.route = savedRoute;
+  drawRoute(savedRoute);
+  setStart(savedRoute.coords[0], savedRoute.startMode || 'manual');
+  showView('route'); renderRouteStats(); fitRoute(savedRoute);
+  if (savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; el.routeHint.textContent = 'You were mid-walk on this loop.'; }
+  else { el.btnStart.dataset.resume = '0'; }
+  if (!savedRoute.profile) loadElevation(savedRoute);
+} else {
+  showView('plan');
+}
+locateOnce({ centre: !savedRoute });
+})();
+</script>
+</body>
+</html>
