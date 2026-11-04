@@ -453,13 +453,14 @@ async function fetchElevation(pts) {
 
 // OpenRouteService (HeiGIT API): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
 const ORS_BASE = 'https://api.heigit.org/openrouteservice/v2/directions/';
-let orsProfile = 'foot-hiking';
+let orsProfile = 'foot-hiking', orsGreenRejected = false;
 async function orsRoute(points, key, green) {
+  if (orsGreenRejected) green = false;
   const body = {
     coordinates: points.map(p => [+p[1].toFixed(6), +p[0].toFixed(6)]),
-    preference: 'recommended', elevation: true, instructions: false, continue_straight: false
+    preference: 'recommended', elevation: true, instructions: false
   };
-  if (green) body.options = { profile_params: { weightings: { green: { factor: 1.0 }, quiet: { factor: 0.6 } } } };
+  if (green) body.options = { profile_params: { weightings: { green: 1, quiet: 0.6 } } };
   let res;
   try {
     res = await fetch(ORS_BASE + orsProfile + '/geojson', { method: 'POST', headers: { 'Authorization': key, 'Content-Type': 'application/json', 'Accept': 'application/json, application/geo+json' }, body: JSON.stringify(body), signal: timeoutSignal(30000) });
@@ -469,9 +470,10 @@ async function orsRoute(points, key, green) {
   if (res.status === 429) throw new RouteError('key', 'OpenRouteService is rate-limiting you for a minute.');
   if (res.status === 404 && orsProfile === 'foot-hiking') { orsProfile = 'foot-walking'; return orsRoute(points, key, green); }
   if (!res.ok || !j) {
-    const code = j && j.error && j.error.code;
+    const code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || '';
     if (code === 2009 || code === 2010) throw new RouteError('noroute', 'No route');
-    throw new RouteError('http', 'OpenRouteService error' + (j && j.error && j.error.message ? ': ' + j.error.message : ' (' + res.status + ')'));
+    if (green && res.status === 400 && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, key, false); }
+    throw new RouteError('http', 'OpenRouteService error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
   }
   const f = j.features && j.features[0];
   if (!f || !f.geometry || !f.geometry.coordinates || f.geometry.coordinates.length < 2) throw new RouteError('noroute', 'No route');
@@ -723,7 +725,8 @@ async function makeLoop(seed) {
       }
     }
     route.startMode = state.start.mode; route.createdAt = Date.now(); route.profile = null; route.ascent = null; route.descent = null;
-    route.mode = route.fallback ? 'osrm' : mode;
+    route.mode = route.fallback ? 'osrm' : (mode === 'green' && orsGreenRejected ? 'ors' : mode);
+    if (mode === 'green' && orsGreenRejected && !route.fallback) toast('OpenRouteService refused the green preference, so this loop is trail routing without it.', 7000);
     if (route.eles) {
       const n = route.coords.length, step = Math.max(1, Math.floor(n / 200)), ds = [], ele = [];
       for (let i = 0; i < n; i += step) { ds.push(route.cum[i]); ele.push(route.eles[i]); }
