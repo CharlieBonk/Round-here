@@ -235,41 +235,16 @@ a.btn{text-decoration:none}
       </div>
       <p class="hint" id="planHint">Starts and ends right where you are. Long-press the map to start somewhere else.</p>
       <div class="mode-row">
-        <span class="tag" id="modeTag"><span class="dot"></span><span id="modeText">Standard routing</span></span>
-        <button class="link" id="btnSettings">Greener routes</button>
+        <span class="tag" id="modeTag"><span class="dot"></span><span id="modeText">Green routing</span></span>
+        <button class="link" id="btnSettings">Settings</button>
       </div>
       <div class="settings" id="settings" hidden>
-        <div class="eyebrow">Greener routes</div>
-        <p>Standard routing only knows the shortest walkable path, so it can't favour parks and woods. With a free OpenRouteService key (now run by HeiGIT), loops prefer green areas and quiet paths, use the hiking profile, and come with elevation.</p>
-        <ol>
-          <li>Create a free account at <a href="https://account.heigit.org/signup" target="_blank" rel="noopener">account.heigit.org</a> and confirm the email.</li>
-          <li>On your account page, find your Standard API key and copy it.</li>
-          <li>Paste it below. It stays on this phone only.</li>
-        </ol>
-        <input class="field" type="text" id="orsKey" placeholder="Paste your HeiGIT / OpenRouteService key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="OpenRouteService key">
+        <div class="eyebrow">Settings</div>
         <label class="check"><input type="checkbox" id="greenToggle" checked> Prefer green and quiet paths</label>
-        <label class="check"><input type="checkbox" id="orsToggle" checked> Use OpenRouteService for loops</label>
-        <div class="row">
-          <button class="btn primary" id="btnSaveKey">Save</button>
-          <button class="btn secondary" id="btnClearKey">Remove key</button>
-        </div>
-        <p id="keyStatus"></p>
-        <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
-        <div class="eyebrow" id="placesHead" style="margin-top:6px">Pub and green tours</div>
-        <p>The Pubs and Green themes look places up through Geoapify, which serves OpenStreetMap's pubs, parks and viewpoints from a fast, reliable service. Free tier, no card: about 3,000 lookups a day; a tour uses a handful.</p>
-        <ol>
-          <li>Sign up free at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> and confirm the email.</li>
-          <li>Create a project; it comes with an API key. Copy it.</li>
-          <li>Paste it below. It stays on this phone only.</li>
-        </ol>
-        <input class="field" type="text" id="placesKey" placeholder="Paste your Geoapify key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Geoapify key">
-        <div class="row">
-          <button class="btn primary" id="btnSavePlaces">Save</button>
-          <button class="btn secondary" id="btnClearPlaces">Remove key</button>
-        </div>
-        <p id="placesStatus"></p>
+        <p>Loops use the hiking profile and, when ticked, lean towards parks, woods and quiet streets rather than the shortest line. Untick it for the most direct paths.</p>
+        <p>Routing and place lookups go through Round Here's own service, so there is nothing to sign up for. Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v3.8</p>
+        <p class="tag" id="version">Round Here v4.0</p>
       </div>
     </div>
 
@@ -676,10 +651,28 @@ async function fetchElevation(pts) {
   return out;
 }
 
-// OpenRouteService (HeiGIT API): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
-const ORS_BASE = 'https://api.heigit.org/openrouteservice/v2/directions/';
+// Round Here's own proxy: holds the routing and places keys, applies the fair-use limits. Each phone sends an anonymous id and a per-loop job id.
+const PROXY = 'https://round-here.charlielatham5.workers.dev';
+let currentJob = '';
+function clientId() {
+  let id = store.get('client', '');
+  if (!id) {
+    try { id = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b => b.toString(16).padStart(2, '0')).join(''); } catch (e) { id = String(Date.now()) + Math.random().toString(16).slice(2, 10); }
+    store.set('client', id);
+  }
+  return id;
+}
+function newJob() { currentJob = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); return currentJob; }
+function proxyHeaders(extra) { return Object.assign({ 'X-Client': clientId(), 'X-Job': currentJob || newJob() }, extra || {}); }
+function proxyError(res, j) {
+  if (res.status === 429 && j && j.error === 'limit') return new RouteError('limit', j.message || 'Fair-use limit reached for now.');
+  if (res.status === 403 && j && j.error === 'origin') return new RouteError('key', 'The routing service refused this copy of the app.');
+  return null;
+}
+
+// OpenRouteService (via the proxy): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
 let orsProfile = 'foot-hiking', orsGreenRejected = false;
-async function orsRoute(points, key, green) {
+async function orsRoute(points, green) {
   if (orsGreenRejected) green = false;
   const body = {
     coordinates: points.map(p => [+p[1].toFixed(6), +p[0].toFixed(6)]),
@@ -689,17 +682,19 @@ async function orsRoute(points, key, green) {
   if (green) body.options = { profile_params: { weightings: { green: 1, quiet: 0.6 } } };
   let res;
   try {
-    res = await fetch(ORS_BASE + orsProfile + '/geojson', { method: 'POST', headers: { 'Authorization': key, 'Content-Type': 'application/json', 'Accept': 'application/json, application/geo+json' }, body: JSON.stringify(body), signal: timeoutSignal(30000) });
-  } catch (e) { throw new RouteError('network', 'Could not reach OpenRouteService. Check your signal and try again.'); }
+    res = await fetch(PROXY + '/route/' + orsProfile, { method: 'POST', headers: proxyHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body), signal: timeoutSignal(30000) });
+  } catch (e) { throw new RouteError('network', 'Could not reach the routing service. Check your signal and try again.'); }
   let j = null; try { j = await res.json(); } catch (e) {}
-  if (res.status === 401 || res.status === 403) throw new RouteError('key', 'OpenRouteService rejected the key, or your daily quota is used up.');
-  if (res.status === 429) throw new RouteError('key', 'OpenRouteService is rate-limiting you for a minute.');
-  if (res.status === 404 && orsProfile === 'foot-hiking') { orsProfile = 'foot-walking'; return orsRoute(points, key, green); }
+  const pe = proxyError(res, j); if (pe) throw pe;
+  if (res.status === 401 || res.status === 403) throw new RouteError('key', 'The routing service is unavailable right now.');
+  if (res.status === 429) throw new RouteError('key', 'The routing service is busy right now.');
+  if (res.status === 404 && orsProfile === 'foot-hiking' && !(j && j.error && j.error.code)) { orsProfile = 'foot-walking'; return orsRoute(points, green); }
   if (!res.ok || !j) {
-    const code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || '';
+    const code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || (j && j.message) || '';
     if (code === 2009 || code === 2010) { const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(msg); if (m) e.badIndex = +m[1]; throw e; }
-    if (green && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, key, false); }
-    throw new RouteError('http', 'OpenRouteService error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
+    if (green && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false); }
+    if (res.status >= 500) throw new RouteError('key', 'The routing service is having trouble right now.');
+    throw new RouteError('http', 'Routing error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
   }
   const f = j.features && j.features[0];
   if (!f || !f.geometry || !f.geometry.coordinates || f.geometry.coordinates.length < 2) throw new RouteError('noroute', 'No route');
@@ -818,13 +813,8 @@ async function wikiCandidates(start, radius) {
   return all;
 }
 
-// ---------- Places (Geoapify, for pubs and green spaces) ----------
-const GEOAPIFY = 'https://api.geoapify.com/v2/places';
-const PLACE_CATS = {
-  pubs: 'catering.pub,catering.biergarten',
-  green: 'leisure.park,leisure.park.garden,leisure.park.nature_reserve,natural.forest,natural.mountain.peak,natural.mountain.hill,natural.heath_moor,beach,tourism.attraction.viewpoint'
-};
-const THEME_NEEDS_KEY = { pubs: true, green: true };
+// ---------- Places (Geoapify via the proxy, for pubs and green spaces) ----------
+const THEME_USES_PLACES = { pubs: true, green: true };
 const diag = { last: '' };
 function osmDescribe(t) {
   const label = t.amenity === 'pub' ? 'Pub' : t.amenity === 'biergarten' ? 'Beer garden' : t.leisure === 'park' ? 'Park' : t.leisure === 'nature_reserve' ? 'Nature reserve' : t.leisure === 'garden' ? 'Garden' : t.tourism === 'viewpoint' ? 'Viewpoint' : t.natural === 'beach' ? 'Beach' : t.natural === 'peak' ? 'Hill' : t.natural === 'wood' || t.landuse === 'forest' ? 'Woodland' : t.natural === 'water' ? 'Lake' : t.natural === 'heath' ? 'Heath' : t.boundary === 'national_park' ? 'National park' : t.boundary === 'protected_area' ? 'Protected area' : 'Place';
@@ -842,14 +832,15 @@ function osmDescribe(t) {
   if (t.operator && (t.leisure || t.boundary)) bits.push('Looked after by ' + t.operator + '.');
   return { label: label + (t.brewery ? ' · ' + t.brewery : ''), text: bits.join(' ') };
 }
-async function placesCandidates(start, radius, theme, key, rng) {
-  const q = new URLSearchParams({ categories: PLACE_CATS[theme], filter: 'circle:' + start[1].toFixed(6) + ',' + start[0].toFixed(6) + ',' + Math.round(radius), bias: 'proximity:' + start[1].toFixed(6) + ',' + start[0].toFixed(6), limit: '120', apiKey: key });
+async function placesCandidates(start, radius, theme, rng) {
+  const q = new URLSearchParams({ lat: start[0].toFixed(6), lon: start[1].toFixed(6), radius: String(Math.round(radius)), theme });
   let res;
-  try { res = await fetch(GEOAPIFY + '?' + q.toString(), { signal: timeoutSignal(15000) }); }
+  try { res = await fetch(PROXY + '/places?' + q.toString(), { headers: proxyHeaders(), signal: timeoutSignal(15000) }); }
   catch (e) { diag.places = 'failed (unreachable)'; throw new RouteError('network', 'Could not reach the places service. Check your signal and try again.'); }
   let j = null; try { j = await res.json(); } catch (e) {}
-  if (res.status === 401 || res.status === 403) { diag.places = 'failed (key rejected)'; throw new RouteError('places', 'The places key was rejected. Check it in Settings.'); }
-  if (res.status === 429) { diag.places = 'failed (quota)'; throw new RouteError('places', 'The places key has used its free quota for today.'); }
+  const pe = proxyError(res, j); if (pe) { diag.places = 'failed (' + (pe.kind === 'limit' ? 'limit' : 'refused') + ')'; throw pe; }
+  if (res.status === 401 || res.status === 403) { diag.places = 'failed (upstream key)'; throw new RouteError('places', 'The places service is unavailable right now.'); }
+  if (res.status === 429) { diag.places = 'failed (quota)'; throw new RouteError('places', 'The places service has used its free allowance for today.'); }
   if (!res.ok || !j || !Array.isArray(j.features)) { diag.places = 'failed (HTTP ' + res.status + ')'; throw new RouteError('places', 'Places lookup failed' + (j && j.message ? ': ' + j.message : ' (' + res.status + ')') + '.'); }
   const out = [];
   for (const f of j.features) {
@@ -875,15 +866,14 @@ async function placesCandidates(start, radius, theme, key, rng) {
 
 const THEME_LABEL = { walk: '', all: '', history: 'history', pubs: 'pub', green: 'green' };
 // Pick the best-read places within reach (by theme), thread a loop through them, fit the length.
-async function generateTour(start, targetM, seed, router, onProgress, theme, placesKey) {
+async function generateTour(start, targetM, seed, router, onProgress, theme) {
   theme = theme || 'all';
-  if (THEME_NEEDS_KEY[theme] && !placesKey) theme = 'all';
   const rng = mulberry32(seed);
   onProgress && onProgress(1, 5, 'Finding ' + (theme === 'pubs' ? 'pubs…' : theme === 'green' ? 'green spaces…' : 'landmarks…'));
   const radius = Math.min(10000, Math.max(700, targetM * 0.4));
   const noPoi = () => new RouteError('nopoi', theme === 'pubs' ? 'No pubs within reach here, so this is a plain loop.' : theme === 'green' ? 'No parks or viewpoints within reach here, so this is a plain loop.' : theme === 'history' ? 'No historic places within reach here, so this is a plain loop.' : 'No landmarks within reach here, so this is a plain loop.');
-  const usesOsm = !!THEME_NEEDS_KEY[theme];
-  const [wikiRes, osmRes] = await Promise.allSettled([wikiCandidates(start, radius), usesOsm ? placesCandidates(start, radius, theme, placesKey, rng) : Promise.resolve([])]);
+  const usesOsm = !!THEME_USES_PLACES[theme];
+  const [wikiRes, osmRes] = await Promise.allSettled([wikiCandidates(start, radius), usesOsm ? placesCandidates(start, radius, theme, rng) : Promise.resolve([])]);
   if (usesOsm && osmRes.status === 'rejected' && osmRes.reason && osmRes.reason.kind === 'places') throw osmRes.reason;
   if (wikiRes.status === 'rejected' && (!usesOsm || osmRes.status === 'rejected')) throw wikiRes.reason;
   let pois = [];
@@ -1163,92 +1153,44 @@ function updateMeMarker(p, acc, heading) {
 const state = {
   mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
-  orsKey: String(store.get('orsKey', '') || '').trim(), green: store.get('green', true) !== false, orsOn: store.get('orsOn', true) !== false,
-  theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all',
-  placesKey: String(store.get('placesKey', '') || '').trim()
+  green: store.get('green', true) !== false,
+  theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all'
 };
-if (THEME_NEEDS_KEY[state.theme] && !state.placesKey) state.theme = 'all';
 state.kind = state.theme === 'walk' ? 'loop' : 'tour';
 
 // ---------- Walk type (one chip row: plain loop or a themed tour) ----------
 const elK = { themes: $('themes') };
-const LOCK_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-1px;margin-left:4px" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 function renderKind() {
   state.kind = state.theme === 'walk' ? 'loop' : 'tour';
   const t = state.kind === 'tour';
-  elK.themes.querySelectorAll('button').forEach(b => {
-    const locked = !!THEME_NEEDS_KEY[b.dataset.theme] && !state.placesKey;
-    b.classList.toggle('on', b.dataset.theme === state.theme);
-    b.classList.toggle('locked', locked);
-    b.innerHTML = b.dataset.label + (locked ? LOCK_SVG : '');
-    b.setAttribute('aria-label', b.dataset.label + (locked ? ' (needs a places key)' : ''));
-  });
+  elK.themes.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === state.theme));
   el.btnGo.textContent = t ? 'Make me a tour' : 'Make me a loop';
   renderPlanHint();
   requestAnimationFrame(setSheetHeight);
 }
-elK.themes.querySelectorAll('button').forEach(b => { b.dataset.label = b.textContent.trim(); });
 elK.themes.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
-  if (THEME_NEEDS_KEY[b.dataset.theme] && !state.placesKey) {
-    elS.settings.hidden = false; renderDiag(); requestAnimationFrame(() => { setSheetHeight(); $('placesHead').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
-    toast((b.dataset.theme === 'pubs' ? 'Pub' : 'Green') + ' tours need a free Geoapify key. Paste it under Settings.', 5000);
-    return;
-  }
   state.theme = b.dataset.theme; store.set('theme', state.theme); renderKind();
 });
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
   const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
   const tour = { walk: ' A plain loop with no stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
-  if (state.theme === 'all' && !state.placesKey) tour.all += ' Pubs and Green need a free places key (see Settings).';
   el.planHint.textContent = base + (tour[state.theme] || '');
 }
 
-// ---------- Routing settings ----------
-const elS = { btnSettings: $('btnSettings'), settings: $('settings'), orsKey: $('orsKey'), greenToggle: $('greenToggle'), orsToggle: $('orsToggle'), btnSaveKey: $('btnSaveKey'), btnClearKey: $('btnClearKey'), keyStatus: $('keyStatus'), modeTag: $('modeTag'), modeText: $('modeText'),
-  placesKey: $('placesKey'), btnSavePlaces: $('btnSavePlaces'), btnClearPlaces: $('btnClearPlaces'), placesStatus: $('placesStatus') };
-function routingMode() { return state.orsKey && state.orsOn ? (state.green ? 'green' : 'ors') : 'osrm'; }
+// ---------- Settings ----------
+const elS = { btnSettings: $('btnSettings'), settings: $('settings'), greenToggle: $('greenToggle'), modeTag: $('modeTag'), modeText: $('modeText') };
+function routingMode() { return state.green ? 'green' : 'ors'; }
 function renderRoutingMode() {
   const m = routingMode();
   elS.modeTag.className = 'tag' + (m === 'green' ? ' green' : '');
-  elS.modeText.textContent = m === 'green' ? 'Green routing' : m === 'ors' ? 'Trail routing (OpenRouteService)' : 'Standard routing';
-  elS.btnSettings.textContent = state.orsKey || state.placesKey ? 'Settings' : 'Greener routes & more';
-  elS.orsKey.value = state.orsKey; elS.greenToggle.checked = state.green; elS.orsToggle.checked = state.orsOn;
-  elS.orsToggle.disabled = !state.orsKey;
-  elS.keyStatus.textContent = !state.orsKey ? '' : state.orsOn ? 'Key saved. Loops come from OpenRouteService; each loop uses 2 to 6 of your daily free requests.' : 'Key saved but switched off. Loops use standard routing.';
-  elS.placesKey.value = state.placesKey;
-  elS.placesStatus.textContent = state.placesKey ? 'Key saved. Pub and Green tours are unlocked.' : '';
+  elS.modeText.textContent = m === 'green' ? 'Green routing' : 'Trail routing';
+  elS.greenToggle.checked = state.green;
 }
-elS.btnSavePlaces.addEventListener('click', () => {
-  const k = elS.placesKey.value.trim();
-  if (!k) { elS.placesStatus.textContent = 'Paste a key first.'; return; }
-  state.placesKey = k; store.set('placesKey', k);
-  renderRoutingMode(); renderKind(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
-  toast('Pub and Green tours unlocked');
-});
-elS.btnClearPlaces.addEventListener('click', () => {
-  state.placesKey = ''; store.del('placesKey');
-  if (THEME_NEEDS_KEY[state.theme]) { state.theme = 'all'; store.set('theme', 'all'); }
-  renderRoutingMode(); renderKind(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
-  toast('Places key removed');
-});
 function renderDiag() { const d = $('diag'); d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
 elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; renderDiag(); requestAnimationFrame(setSheetHeight); });
-elS.btnSaveKey.addEventListener('click', () => {
-  const k = elS.orsKey.value.trim();
-  if (!k) { elS.keyStatus.textContent = 'Paste a key first.'; return; }
-  state.orsKey = k; state.green = elS.greenToggle.checked; state.orsOn = true;
-  store.set('orsKey', k); store.set('green', state.green); store.set('orsOn', true);
-  renderRoutingMode(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
-  toast(state.green ? 'Green routing on' : 'OpenRouteService routing on');
-});
-elS.btnClearKey.addEventListener('click', () => {
-  state.orsKey = ''; store.del('orsKey'); renderRoutingMode(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
-  toast('Key removed. Standard routing.');
-});
-elS.greenToggle.addEventListener('change', () => { state.green = elS.greenToggle.checked; store.set('green', state.green); renderRoutingMode(); });
-elS.orsToggle.addEventListener('change', () => { state.orsOn = elS.orsToggle.checked; store.set('orsOn', state.orsOn); renderRoutingMode(); toast(routingMode() === 'osrm' ? 'Standard routing' : 'OpenRouteService routing on'); });
+elS.greenToggle.addEventListener('change', () => { state.green = elS.greenToggle.checked; store.set('green', state.green); renderRoutingMode(); toast(state.green ? 'Green routing on' : 'Trail routing, most direct paths'); });
 renderRoutingMode();
 el.distRange.value = state.targetKm;
 
@@ -1323,30 +1265,32 @@ async function makeLoop(seed) {
   try {
     const progress = (n, max, text) => { el.btnGo.innerHTML = '<span class="spinner"></span> ' + (text || 'Finding paths…') + ' ' + n + '/' + max; };
     const mode = routingMode(), start = state.start.p;
+    newJob();
     const routeWith = async router => {
       if (state.kind === 'tour') {
-        try { const r = await generateTour(start, targetM, seed, router, progress, state.theme, state.placesKey); r.kind = 'tour'; return r; }
+        try { const r = await generateTour(start, targetM, seed, router, progress, state.theme); r.kind = 'tour'; return r; }
         catch (e) {
           if (e.kind === 'nopoi') toast(e.message, 6000);
           else if (e.kind === 'places') toast(e.message + ' Making a plain loop instead.', 7000);
+          else if (e.kind === 'limit') { toast(e.message + ' Plain loop with standard routing for now.', 8000); throw Object.assign(new RouteError('key', e.message), { limited: true }); }
           else throw e;
         }
       }
       const r = await generateLoop(start, targetM, seed, progress, router); r.kind = 'loop'; return r;
     };
     let route;
-    if (mode === 'osrm') route = await routeWith(osrmRoute);
-    else {
-      const key = state.orsKey, green = mode === 'green';
-      try { route = await routeWith(pts => orsRoute(pts, key, green)); }
-      catch (e) {
-        if (e.kind === 'key') { toast(e.message + ' Using standard routing for this loop.', 7000); route = await routeWith(osrmRoute); route.fallback = true; }
-        else throw e;
-      }
+    try { route = await routeWith(pts => orsRoute(pts, mode === 'green')); }
+    catch (e) {
+      if (e.kind === 'key' || e.kind === 'limit') {
+        if (!e.limited) toast((e.kind === 'limit' ? e.message : 'Green routing is unavailable right now.') + ' Standard routing for this loop.', 7000);
+        const wasTour = state.kind; state.kind = 'loop';
+        try { route = await routeWith(osrmRoute); } finally { state.kind = wasTour; }
+        route.fallback = true;
+      } else throw e;
     }
     route.startMode = state.start.mode; route.createdAt = Date.now(); route.profile = null; route.ascent = null; route.descent = null;
     route.mode = route.fallback ? 'osrm' : (mode === 'green' && orsGreenRejected ? 'ors' : mode);
-    if (mode === 'green' && orsGreenRejected && !route.fallback) toast('OpenRouteService refused the green preference, so this loop is trail routing without it.', 7000);
+    if (mode === 'green' && orsGreenRejected && !route.fallback) toast('The green preference was refused, so this loop is trail routing without it.', 7000);
     try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     adoptRoute(route);
   } catch (e) {
@@ -1390,11 +1334,12 @@ async function skipStop(i) {
   const label = elC.skip.innerHTML; elC.skip.disabled = true; elC.skip.innerHTML = '<span class="spinner"></span> Re-routing…';
   try {
     const mode = routingMode();
-    const router = mode === 'osrm' || r.mode === 'osrm' ? osrmRoute : pts => orsRoute(pts, state.orsKey, mode === 'green');
+    newJob();
+    const router = r.mode === 'osrm' ? osrmRoute : pts => orsRoute(pts, mode === 'green');
     const progress = (n, max) => { elC.skip.innerHTML = '<span class="spinner"></span> Re-routing… ' + n + '/' + max; };
     let next;
     try { next = await swapStop(r, gone.id, router, progress); }
-    catch (e) { if (e.kind === 'key') next = await swapStop(r, gone.id, osrmRoute, progress); else throw e; }
+    catch (e) { if (e.kind === 'key' || e.kind === 'limit') { toast(e.kind === 'limit' ? e.message : 'Green routing is unavailable right now; standard routing for this change.', 6000); next = await swapStop(r, gone.id, osrmRoute, progress); } else throw e; }
     if (!next) { toast('That was the last stop. Shuffle or make a new tour instead.', 5000); return; }
     next.mode = r.mode; next.shared = false;
     closeCard(); adoptRoute(next);
