@@ -79,10 +79,10 @@ button{font:inherit;color:inherit}
 .banner{position:absolute;z-index:700;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(var(--sheet-h,280px) + 12px);
   background:var(--warn);color:#fff;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);font-weight:600;display:flex;gap:10px;align-items:center}
 .banner svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.toast{position:absolute;z-index:800;left:50%;transform:translateX(-50%);bottom:calc(var(--sheet-h,280px) + 76px);max-width:min(92vw,420px);background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow);text-align:center}
+.toast{position:absolute;z-index:800;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 160px);max-width:min(92vw,420px);background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow);text-align:center}
 
 /* Bottom sheet */
-.sheet{position:absolute;z-index:650;left:0;right:0;bottom:0;background:var(--panel);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);
+.sheet{position:absolute;z-index:650;left:0;right:0;bottom:0;max-height:78%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--panel);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);
   padding-top:10px;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
   padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
 .grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
@@ -121,6 +121,17 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
 .walk-nums span{color:var(--muted);font-weight:600}
 .progress-txt{font-size:14px;color:var(--muted);font-weight:600}
 .spinner{width:18px;height:18px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+.mode-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.tag.green{color:var(--ok)}
+.tag .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.settings{display:flex;flex-direction:column;gap:10px;background:var(--panel-2);border-radius:14px;padding:14px}
+.settings p{margin:0;font-size:13px;color:var(--muted);line-height:1.45}
+.settings a{color:var(--accent);font-weight:600}
+.settings ol{margin:0;padding-left:18px;font-size:13px;color:var(--muted);line-height:1.5}
+.field{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:14px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel);color:var(--fg);min-width:0}
+.check{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+.check input{width:20px;height:20px;accent-color:var(--accent);margin:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Map markers */
@@ -182,6 +193,28 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
         <button class="btn primary" id="btnGo" disabled>Make me a loop</button>
       </div>
       <p class="hint" id="planHint">Starts and ends right where you are. Long-press the map to start somewhere else.</p>
+      <div class="mode-row">
+        <span class="tag" id="modeTag"><span class="dot"></span><span id="modeText">Standard routing</span></span>
+        <button class="link" id="btnSettings">Greener routes</button>
+      </div>
+      <div class="settings" id="settings" hidden>
+        <div class="eyebrow">Greener routes</div>
+        <p>Standard routing only knows the shortest walkable path, so it can't favour parks and woods. With a free OpenRouteService key (now run by HeiGIT), loops prefer green areas and quiet paths, use the hiking profile, and come with elevation.</p>
+        <ol>
+          <li>Create a free account at <a href="https://account.heigit.org/signup" target="_blank" rel="noopener">account.heigit.org</a> and confirm the email.</li>
+          <li>On your account page, find your Standard API key and copy it.</li>
+          <li>Paste it below. It stays on this phone only.</li>
+        </ol>
+        <input class="field" type="text" id="orsKey" placeholder="Paste your HeiGIT / OpenRouteService key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="OpenRouteService key">
+        <label class="check"><input type="checkbox" id="greenToggle" checked> Prefer green and quiet paths</label>
+        <label class="check"><input type="checkbox" id="orsToggle" checked> Use OpenRouteService for loops</label>
+        <div class="row">
+          <button class="btn primary" id="btnSaveKey">Save</button>
+          <button class="btn secondary" id="btnClearKey">Remove key</button>
+        </div>
+        <p id="keyStatus"></p>
+        <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
+      </div>
     </div>
 
     <!-- ROUTE -->
@@ -418,8 +451,39 @@ async function fetchElevation(pts) {
   return out;
 }
 
+// OpenRouteService (HeiGIT API): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
+const ORS_BASE = 'https://api.heigit.org/openrouteservice/v2/directions/';
+let orsProfile = 'foot-hiking';
+async function orsRoute(points, key, green) {
+  const body = {
+    coordinates: points.map(p => [+p[1].toFixed(6), +p[0].toFixed(6)]),
+    preference: 'recommended', elevation: true, instructions: false, continue_straight: false
+  };
+  if (green) body.options = { profile_params: { weightings: { green: { factor: 1.0 }, quiet: { factor: 0.6 } } } };
+  let res;
+  try {
+    res = await fetch(ORS_BASE + orsProfile + '/geojson', { method: 'POST', headers: { 'Authorization': key, 'Content-Type': 'application/json', 'Accept': 'application/json, application/geo+json' }, body: JSON.stringify(body), signal: timeoutSignal(30000) });
+  } catch (e) { throw new RouteError('network', 'Could not reach OpenRouteService. Check your signal and try again.'); }
+  let j = null; try { j = await res.json(); } catch (e) {}
+  if (res.status === 401 || res.status === 403) throw new RouteError('key', 'OpenRouteService rejected the key, or your daily quota is used up.');
+  if (res.status === 429) throw new RouteError('key', 'OpenRouteService is rate-limiting you for a minute.');
+  if (res.status === 404 && orsProfile === 'foot-hiking') { orsProfile = 'foot-walking'; return orsRoute(points, key, green); }
+  if (!res.ok || !j) {
+    const code = j && j.error && j.error.code;
+    if (code === 2009 || code === 2010) throw new RouteError('noroute', 'No route');
+    throw new RouteError('http', 'OpenRouteService error' + (j && j.error && j.error.message ? ': ' + j.error.message : ' (' + res.status + ')'));
+  }
+  const f = j.features && j.features[0];
+  if (!f || !f.geometry || !f.geometry.coordinates || f.geometry.coordinates.length < 2) throw new RouteError('noroute', 'No route');
+  const raw = f.geometry.coordinates;
+  const coords = raw.map(c => [c[1], c[0]]);
+  const eles = raw.every(c => typeof c[2] === 'number') ? raw.map(c => c[2]) : null;
+  return { coords, eles, distance: f.properties && f.properties.summary ? f.properties.summary.distance : null };
+}
+
 // Grow or shrink a circle of waypoints until the routed loop lands near the target length.
-async function generateLoop(start, targetM, seed, onProgress) {
+async function generateLoop(start, targetM, seed, onProgress, router) {
+  router = router || osrmRoute;
   const rng = mulberry32(seed);
   let bearingDeg = rng() * 360, clockwise = rng() < 0.5;
   const K = targetM <= 5000 ? 4 : targetM <= 12000 ? 5 : 6;
@@ -432,14 +496,14 @@ async function generateLoop(start, targetM, seed, onProgress) {
       calls++; onProgress && onProgress(calls, MAX_CALLS);
       const wps = planWaypoints(start, r, bearingDeg, clockwise, K, jitter);
       let res;
-      try { res = await osrmRoute(wps); }
+      try { res = await router(wps); }
       catch (e) { if (e.kind === 'noroute') { bearingDeg = (bearingDeg + 75) % 360; continue; } throw e; }
       const cum = cumulative(res.coords), total = cum[cum.length - 1];
       if (total < 100) { bearingDeg = (bearingDeg + 75) % 360; continue; }
       const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
       const err = Math.abs(total - targetM) / targetM;
       const score = err + 0.6 * Math.max(0, overlap - 0.08);
-      const cand = { coords: res.coords, cum, total, overlap, err, score, seed };
+      const cand = { coords: res.coords, eles: res.eles || null, cum, total, overlap, err, score, seed };
       if (!best || score < best.score) best = cand;
       if (err < 0.06) break;
       r = Math.min(25000, Math.max(150, r * Math.pow(targetM / total, 0.9)));
@@ -544,8 +608,38 @@ function updateMeMarker(p, acc, heading) {
 // ---------- State ----------
 const state = {
   mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
-  walk: null, watchId: null, following: true, lastFix: null, lastHeading: null
+  walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
+  orsKey: String(store.get('orsKey', '') || '').trim(), green: store.get('green', true) !== false, orsOn: store.get('orsOn', true) !== false
 };
+
+// ---------- Routing settings ----------
+const elS = { btnSettings: $('btnSettings'), settings: $('settings'), orsKey: $('orsKey'), greenToggle: $('greenToggle'), orsToggle: $('orsToggle'), btnSaveKey: $('btnSaveKey'), btnClearKey: $('btnClearKey'), keyStatus: $('keyStatus'), modeTag: $('modeTag'), modeText: $('modeText') };
+function routingMode() { return state.orsKey && state.orsOn ? (state.green ? 'green' : 'ors') : 'osrm'; }
+function renderRoutingMode() {
+  const m = routingMode();
+  elS.modeTag.className = 'tag' + (m === 'green' ? ' green' : '');
+  elS.modeText.textContent = m === 'green' ? 'Green routing' : m === 'ors' ? 'Trail routing (OpenRouteService)' : 'Standard routing';
+  elS.btnSettings.textContent = state.orsKey ? 'Routing settings' : 'Greener routes';
+  elS.orsKey.value = state.orsKey; elS.greenToggle.checked = state.green; elS.orsToggle.checked = state.orsOn;
+  elS.orsToggle.disabled = !state.orsKey;
+  elS.keyStatus.textContent = !state.orsKey ? '' : state.orsOn ? 'Key saved. Loops come from OpenRouteService; each loop uses 2 to 6 of your daily free requests.' : 'Key saved but switched off. Loops use standard routing.';
+}
+elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; requestAnimationFrame(setSheetHeight); });
+elS.btnSaveKey.addEventListener('click', () => {
+  const k = elS.orsKey.value.trim();
+  if (!k) { elS.keyStatus.textContent = 'Paste a key first.'; return; }
+  state.orsKey = k; state.green = elS.greenToggle.checked; state.orsOn = true;
+  store.set('orsKey', k); store.set('green', state.green); store.set('orsOn', true);
+  renderRoutingMode(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
+  toast(state.green ? 'Green routing on' : 'OpenRouteService routing on');
+});
+elS.btnClearKey.addEventListener('click', () => {
+  state.orsKey = ''; store.del('orsKey'); renderRoutingMode(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
+  toast('Key removed. Standard routing.');
+});
+elS.greenToggle.addEventListener('change', () => { state.green = elS.greenToggle.checked; store.set('green', state.green); renderRoutingMode(); });
+elS.orsToggle.addEventListener('change', () => { state.orsOn = elS.orsToggle.checked; store.set('orsOn', state.orsOn); renderRoutingMode(); toast(routingMode() === 'osrm' ? 'Standard routing' : 'OpenRouteService routing on'); });
+renderRoutingMode();
 el.distRange.value = state.targetKm;
 
 function setDistance(km, fromSlider) {
@@ -616,12 +710,31 @@ async function makeLoop(seed) {
   el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths…';
   el.btnShuffle.innerHTML = '<span class="spinner"></span> Shuffling';
   try {
-    const route = await generateLoop(state.start.p, targetM, seed, (n, max) => { el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths… ' + n + '/' + max; });
+    const progress = (n, max) => { el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths… ' + n + '/' + max; };
+    const mode = routingMode();
+    let route;
+    if (mode === 'osrm') route = await generateLoop(state.start.p, targetM, seed, progress);
+    else {
+      const key = state.orsKey, green = mode === 'green';
+      try { route = await generateLoop(state.start.p, targetM, seed, progress, pts => orsRoute(pts, key, green)); }
+      catch (e) {
+        if (e.kind === 'key') { toast(e.message + ' Using standard routing for this loop.', 7000); route = await generateLoop(state.start.p, targetM, seed, progress); route.fallback = true; }
+        else throw e;
+      }
+    }
     route.startMode = state.start.mode; route.createdAt = Date.now(); route.profile = null; route.ascent = null; route.descent = null;
+    route.mode = route.fallback ? 'osrm' : mode;
+    if (route.eles) {
+      const n = route.coords.length, step = Math.max(1, Math.floor(n / 200)), ds = [], ele = [];
+      for (let i = 0; i < n; i += step) { ds.push(route.cum[i]); ele.push(route.eles[i]); }
+      if (ds[ds.length - 1] !== route.cum[n - 1]) { ds.push(route.cum[n - 1]); ele.push(route.eles[n - 1]); }
+      route.profile = { ds, ele }; const ad = ascentDescent(ele); route.ascent = ad.up; route.descent = ad.down;
+      delete route.eles;
+    }
     state.route = route;
     drawRoute(route); showView('route'); renderRouteStats(); fitRoute(route);
     store.set('route', serializeRoute(route));
-    loadElevation(route);
+    if (!route.profile) loadElevation(route);
   } catch (e) {
     toast(e.message || 'Something went wrong making the loop.', 6000);
   } finally {
@@ -632,7 +745,7 @@ async function makeLoop(seed) {
   }
 }
 function serializeRoute(r) {
-  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent };
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode };
 }
 function reviveRoute(s) {
   if (!s || !s.coords || s.coords.length < 2) return null;
@@ -657,7 +770,8 @@ function renderRouteStats() {
   el.stDist.textContent = fmtKm(r.total) + ' km';
   el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
   el.stTime.textContent = '~' + fmtTime(estimateMinutes(r.total, r.ascent || 0));
-  el.routeHint.textContent = r.overlap > 0.3 ? 'Some of this loop doubles back on itself. Shuffle for a different shape.' : (r.err > 0.12 ? 'Closest loop the paths here allow; the length is ' + (r.total > state.targetKm * 1000 ? 'longer' : 'shorter') + ' than you asked for.' : '');
+  const tag = r.mode === 'green' ? 'Green routing. ' : r.mode === 'ors' ? 'Trail routing. ' : '';
+  el.routeHint.textContent = tag + (r.overlap > 0.3 ? 'Some of this loop doubles back on itself. Shuffle for a different shape.' : (r.err > 0.12 ? 'Closest loop the paths here allow; the length is ' + (r.total > state.targetKm * 1000 ? 'longer' : 'shorter') + ' than you asked for.' : ''));
   renderProfile(null);
 }
 function renderProfile(progress) {
