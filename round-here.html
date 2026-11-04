@@ -132,6 +132,35 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
 .field{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:14px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel);color:var(--fg);min-width:0}
 .check{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
 .check input{width:20px;height:20px;accent-color:var(--accent);margin:0}
+
+/* Tour mode */
+.seg{display:flex;background:var(--panel-2);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:10px;padding:9px 10px;font-weight:700;font-size:14px;cursor:pointer;color:var(--muted)}
+.seg button.on{background:var(--panel);color:var(--fg);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.stops{display:flex;flex-direction:column;gap:2px;max-height:168px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;padding:4px}
+.stop-row{display:flex;align-items:center;gap:10px;border:0;background:transparent;text-align:left;padding:6px 8px;border-radius:9px;cursor:pointer;width:100%;color:inherit}
+.stop-row:active{background:var(--panel-2)}
+.stop-row .t{display:flex;flex-direction:column;min-width:0;flex:1}
+.stop-row b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stop-row small{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stop-row .dist{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.stop-pin{width:26px;height:26px;flex:none;border-radius:50%;background:var(--route);color:#fff;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);display:grid;place-items:center;font:800 12px var(--display);cursor:pointer}
+.stop-pin.done{background:var(--route-done)}
+.stop-row .stop-pin,.card-bar .stop-pin{border-color:var(--panel);box-shadow:none;cursor:default}
+.next{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted);font-weight:600;min-width:0}
+.next b{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.card{position:absolute;z-index:900;left:0;right:0;bottom:0;max-height:82%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--panel);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.25);
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 14px);padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+.card-bar{position:sticky;top:0;z-index:1;background:var(--panel);display:flex;align-items:flex-start;gap:12px;padding:16px 0 10px;border-bottom:1px solid var(--line)}
+.card-titles{flex:1;min-width:0}
+.card h2{font-family:var(--display);font-size:22px;line-height:1.15;margin:0;text-wrap:balance}
+.card-titles p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.card-body{display:flex;flex-direction:column;gap:12px;padding-top:12px}
+.card img{width:100%;max-height:220px;object-fit:cover;border-radius:12px;background:var(--panel-2)}
+.card-body p{margin:0;font-size:15px;line-height:1.5;max-width:65ch}
+.card-body .row .btn{flex:1}
+.icon-btn.small{width:36px;height:36px;border-radius:10px;box-shadow:none;font-size:22px;line-height:1;flex:none}
+a.btn{text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Map markers */
@@ -179,6 +208,10 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
 
     <!-- PLAN -->
     <div class="view" id="viewPlan">
+      <div class="seg" role="tablist" aria-label="Walk type">
+        <button id="kindLoop" class="on" role="tab" aria-selected="true">Just walk</button>
+        <button id="kindTour" role="tab" aria-selected="false">Tour the sights</button>
+      </div>
       <div class="row between">
         <div class="eyebrow">How far today?</div>
         <div class="eyebrow" id="startLabel">Starting from your location</div>
@@ -214,14 +247,14 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
         </div>
         <p id="keyStatus"></p>
         <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
-        <p class="tag" id="version">Round Here v2.3</p>
+        <p class="tag" id="version">Round Here v3.0</p>
       </div>
     </div>
 
     <!-- ROUTE -->
     <div class="view" id="viewRoute" hidden>
       <div class="row between">
-        <div class="eyebrow">Your loop</div>
+        <div class="eyebrow" id="routeEyebrow">Your loop</div>
         <button class="link" id="btnBack">Change distance</button>
       </div>
       <div class="stats">
@@ -229,6 +262,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
         <div class="stat"><div class="l">Ascent</div><div class="v" id="stAsc">—</div></div>
         <div class="stat"><div class="l">Est. time</div><div class="v" id="stTime">—</div></div>
       </div>
+      <div class="stops" id="stopsList" hidden></div>
       <svg class="profile" id="profile" aria-label="Elevation profile"></svg>
       <div class="row">
         <button class="btn primary" id="btnStart">Start walking</button>
@@ -248,6 +282,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
         <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Waiting for GPS</span></div>
         <button class="link" id="btnRecentre" hidden>Re-centre</button>
       </div>
+      <button class="next link" id="nextStop" hidden style="text-decoration:none;padding:0"></button>
       <div class="walk-nums"><div><b id="wDone">0.0</b> <span>km done</span></div><div><span id="wLeft">— to go</span></div></div>
       <div class="progress"><div id="progBar"></div></div>
       <div class="row between">
@@ -256,6 +291,27 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
       </div>
     </div>
   </section>
+
+  <div class="card" id="stopCard" hidden role="dialog" aria-modal="true" aria-labelledby="cardTitle">
+    <div class="card-bar">
+      <span class="stop-pin" id="cardNum">1</span>
+      <div class="card-titles"><h2 id="cardTitle"></h2><p id="cardDesc"></p></div>
+      <button class="icon-btn small" id="cardClose" aria-label="Close">×</button>
+    </div>
+    <div class="card-body">
+      <img id="cardImg" alt="" hidden>
+      <p id="cardText"></p>
+      <div class="row">
+        <button class="btn secondary" id="btnSpeak">Read aloud</button>
+        <a class="btn secondary" id="cardLink" href="#" target="_blank" rel="noopener">Wikipedia</a>
+      </div>
+      <div class="row">
+        <button class="btn secondary" id="btnPrevStop">‹ Previous</button>
+        <button class="btn secondary" id="btnNextStop">Next ›</button>
+      </div>
+      <p class="hint">Text and photo from Wikipedia (CC BY-SA).</p>
+    </div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -403,12 +459,86 @@ function planWaypoints(start, r, bearingDeg, clockwise, K, jitter) {
   pts.push(start);
   return pts;
 }
+// ---- Tour planning ----
+// Wikipedia short descriptions that mean "not a place you can stand at".
+const PLACE_EXCLUDE = /\b(town|city|village|hamlet|suburb|civil parish|parish|district|borough|county|ward|constituency|neighbourhood|region|settlement|river|stream|brook|road|street|motorway|avenue|company|business|brand|primary school|secondary school|grammar school|high school|academy|football club|cricket club|rugby club|hockey club|sports club|sports team|radio station|newspaper|magazine|bus route|railway line|electoral|census|surname|given name|politician|footballer|cricketer|actor|singer|writer|musician|band|album|song|film|television|series|episode|novel|murder|disaster|accident|explosion|crash|shooting|riot|wikimedia|disambiguation)\b/i;
+function isPlaceLike(title, desc) {
+  if (!title || /^list of/i.test(title)) return false;
+  if (!desc) return true;
+  return !PLACE_EXCLUDE.test(desc);
+}
+function scorePoi(views, hasImage, rng) {
+  return (Math.log10(1 + (views || 0)) + (hasImage ? 0.4 : 0)) * (rng ? 0.6 + 0.8 * rng() : 1);
+}
+function loopLength(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += haversine(pts[i - 1], pts[i]); return s; }
+function insertionCost(pts, p) {
+  let best = Infinity, at = 1;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const d = haversine(pts[i], p) + haversine(p, pts[i + 1]) - haversine(pts[i], pts[i + 1]);
+    if (d < best) { best = d; at = i + 1; }
+  }
+  return { cost: best, at };
+}
+function twoOpt(pts) {
+  const n = pts.length; let improved = true, guard = 0;
+  while (improved && guard++ < 50) {
+    improved = false;
+    for (let i = 1; i < n - 2; i++) for (let k = i + 1; k < n - 1; k++) {
+      const a = pts[i - 1], b = pts[i], c = pts[k], d = pts[k + 1];
+      if (haversine(a, c) + haversine(b, d) < haversine(a, b) + haversine(c, d) - 1) {
+        const seg = pts.slice(i, k + 1).reverse(); pts.splice(i, seg.length, ...seg); improved = true;
+      }
+    }
+  }
+  return pts;
+}
+// Greedy insertion under a straight-line budget, then 2-opt. pois: [{p:[lat,lon], score}]. Returns the chosen pois in walking order.
+function planTour(start, pois, targetM, maxStops, detour) {
+  const budget = targetM / (detour || 1.3);
+  const pts = [start, start], chosen = [], avail = pois.slice();
+  while (chosen.length < maxStops && avail.length) {
+    const curLen = loopLength(pts);
+    let bestI = -1, bestV = -Infinity, bestIns = null;
+    for (let i = 0; i < avail.length; i++) {
+      const ins = insertionCost(pts, avail[i].p);
+      if (curLen + ins.cost > budget) continue;
+      const v = avail[i].score / (1 + ins.cost / 800);
+      if (v > bestV) { bestV = v; bestI = i; bestIns = ins; }
+    }
+    if (bestI < 0) break;
+    pts.splice(bestIns.at, 0, avail[bestI].p); chosen.push(avail[bestI]); avail.splice(bestI, 1);
+  }
+  twoOpt(pts);
+  return pts.slice(1, -1).map(p => chosen.find(c => c.p === p));
+}
+// Push the midpoint of the longest edge outwards so the loop gains roughly extraM. Returns {index, p}: insert p into seq at index.
+function stretchLoop(start, seqPts, extraM) {
+  const pts = [start].concat(seqPts, [start]);
+  let li = 0, ll = -1;
+  for (let i = 0; i < pts.length - 1; i++) { const l = haversine(pts[i], pts[i + 1]); if (l > ll) { ll = l; li = i; } }
+  const a = pts[li], b = pts[li + 1], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const proj = localProjector(m);
+  let cx = 0, cy = 0; const uniq = pts.slice(0, -1);
+  uniq.forEach(p => { const q = proj(p); cx += q[0]; cy += q[1]; }); cx /= uniq.length; cy /= uniq.length;
+  let dx = -cx, dy = -cy; const len = Math.hypot(dx, dy);
+  if (len < 1) { const q = proj(b); dx = -q[1]; dy = q[0]; }
+  const bearing = (deg(Math.atan2(dx, dy)) + 360) % 360;
+  const h = Math.min(4000, Math.max(200, extraM / 2));
+  return { index: li, p: destination(m, bearing, h) };
+}
+function trimText(t, max) {
+  t = String(t || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max), i = cut.lastIndexOf('. ');
+  return i > max * 0.4 ? cut.slice(0, i + 1) : cut.replace(/\s\S*$/, '') + '…';
+}
 function escapeXml(s) { return String(s).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' })[c]); }
-function buildGpx(name, coords, cum, profile) {
+function buildGpx(name, coords, cum, profile, stops) {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>',
     '<gpx version="1.1" creator="Round Here" xmlns="http://www.topografix.com/GPX/1/1">',
-    '<metadata><name>' + escapeXml(name) + '</name><time>' + new Date().toISOString() + '</time></metadata>',
-    '<trk><name>' + escapeXml(name) + '</name><trkseg>'];
+    '<metadata><name>' + escapeXml(name) + '</name><time>' + new Date().toISOString() + '</time></metadata>'];
+  (stops || []).forEach((s, i) => lines.push('<wpt lat="' + s.lat.toFixed(6) + '" lon="' + s.lon.toFixed(6) + '"><name>' + escapeXml((i + 1) + '. ' + s.title) + '</name>' + (s.desc ? '<desc>' + escapeXml(s.desc) + '</desc>' : '') + '</wpt>'));
+  lines.push('<trk><name>' + escapeXml(name) + '</name><trkseg>');
   for (let i = 0; i < coords.length; i++) {
     const e = profile ? interpProfile(profile.ds, profile.ele, cum[i]) : null;
     lines.push('<trkpt lat="' + coords[i][0].toFixed(6) + '" lon="' + coords[i][1].toFixed(6) + '">' + (e == null ? '' : '<ele>' + e.toFixed(1) + '</ele>') + '</trkpt>');
@@ -484,6 +614,111 @@ async function orsRoute(points, key, green) {
   return { coords, eles, distance: f.properties && f.properties.summary ? f.properties.summary.distance : null };
 }
 
+// ---------- Wikipedia ----------
+const WIKI = 'https://en.wikipedia.org/w/api.php';
+async function wikiGet(params) {
+  const q = new URLSearchParams(Object.assign({ format: 'json', formatversion: '2', origin: '*' }, params));
+  let res;
+  try { res = await fetch(WIKI + '?' + q.toString(), { signal: timeoutSignal(15000) }); }
+  catch (e) { throw new RouteError('network', 'Could not reach Wikipedia to find landmarks. Check your signal and try again.'); }
+  if (!res.ok) throw new RouteError('http', 'Wikipedia error (' + res.status + ').');
+  return res.json();
+}
+async function wikiGeo(start, radius, limit) {
+  const j = await wikiGet({ action: 'query', list: 'geosearch', gscoord: start[0].toFixed(5) + '|' + start[1].toFixed(5), gsradius: Math.round(radius), gslimit: limit });
+  return (j.query && j.query.geosearch) || [];
+}
+async function wikiDetails(pageids) {
+  const batches = [];
+  for (let i = 0; i < pageids.length; i += 50) batches.push(pageids.slice(i, i + 50));
+  const results = await Promise.allSettled(batches.map(b => wikiGet({ action: 'query', pageids: b.join('|'), prop: 'description|pageviews|pageimages', pvipdays: 30, piprop: 'thumbnail', pithumbsize: 480, pilimit: 50 })));
+  const out = {};
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    for (const pg of ((r.value.query && r.value.query.pages) || [])) {
+      let views = 0; if (pg.pageviews) for (const k in pg.pageviews) views += pg.pageviews[k] || 0;
+      out[pg.pageid] = { desc: pg.description || '', views, thumb: pg.thumbnail ? pg.thumbnail.source : null };
+    }
+  }
+  if (!Object.keys(out).length && batches.length) throw new RouteError('network', 'Could not load landmark details from Wikipedia. Try again.');
+  return out;
+}
+async function wikiExtracts(pageids) {
+  const out = {};
+  for (let i = 0; i < pageids.length; i += 20) {
+    const j = await wikiGet({ action: 'query', pageids: pageids.slice(i, i + 20).join('|'), prop: 'extracts', exintro: 1, explaintext: 1, exlimit: 20 });
+    for (const pg of ((j.query && j.query.pages) || [])) out[pg.pageid] = pg.extract || '';
+  }
+  return out;
+}
+
+// Pick the best-read Wikipedia places within reach, thread a loop through them, fit the length.
+async function generateTour(start, targetM, seed, router, onProgress) {
+  const rng = mulberry32(seed);
+  onProgress && onProgress(1, 5, 'Finding landmarks…');
+  const radius = Math.min(10000, Math.max(700, targetM * 0.4));
+  const geo = await wikiGeo(start, radius, 300);
+  const noPoi = () => new RouteError('nopoi', 'No landmarks within reach here, so this is a plain loop.');
+  if (!geo.length) throw noPoi();
+  const det = await wikiDetails(geo.map(g => g.pageid));
+  const pois = [];
+  for (const g of geo) {
+    const d = det[g.pageid]; if (!d) continue;
+    if (!isPlaceLike(g.title, d.desc)) continue;
+    if (haversine(start, [g.lat, g.lon]) < 30) continue;
+    pois.push({ pageid: g.pageid, title: g.title, p: [g.lat, g.lon], desc: d.desc, views: d.views, thumb: d.thumb, score: scorePoi(d.views, !!d.thumb, rng) });
+  }
+  if (!pois.length) throw noPoi();
+  const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
+  const chosen = planTour(start, pois, targetM, maxStops);
+  if (!chosen.length) throw noPoi();
+  let seq = chosen.map(c => ({ p: c.p, poi: c }));
+  let best = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    onProgress && onProgress(2 + attempt, 5, 'Routing the tour…');
+    const wps = [start].concat(seq.map(e => e.p), [start]);
+    let res;
+    try { res = await router(wps); }
+    catch (e) {
+      if (e.kind !== 'noroute') throw e;
+      // A stop the router can't reach: drop the least valuable and retry.
+      if (seq.filter(e => e.poi).length <= 1) throw noPoi();
+      seq = dropWeakest(seq); continue;
+    }
+    const cum = cumulative(res.coords), total = cum[cum.length - 1];
+    const err = Math.abs(total - targetM) / targetM;
+    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap: 0, score: err, seed, seq: seq.slice() };
+    if (!best || err < best.err) best = cand;
+    if (err < 0.12) break;
+    if (total > targetM * 1.12) {
+      if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi)) break;
+      seq = dropWeakest(seq);
+    } else {
+      const st = stretchLoop(start, seq.map(e => e.p), (targetM - total));
+      seq.splice(st.index, 0, { p: st.p, poi: null });
+    }
+  }
+  if (!best) throw noPoi();
+  // Attach stops in walking order with their distance along the route.
+  const proj = localProjector(start), xy = best.coords.map(proj);
+  best.stops = best.seq.filter(e => e.poi).map(e => {
+    const near = nearestOnRoute(xy, proj(e.p), 0, xy.length - 1);
+    const at = near.idx >= 0 ? best.cum[near.idx] + near.t * (best.cum[near.idx + 1] - best.cum[near.idx]) : null;
+    const c = e.poi;
+    return { pageid: c.pageid, title: c.title, desc: c.desc, thumb: c.thumb, lat: c.p[0], lon: c.p[1], url: 'https://en.wikipedia.org/?curid=' + c.pageid, at, gap: near.idx >= 0 ? Math.round(near.dist) : 0, extract: null, visited: false };
+  }).sort((a, b) => (a.at || 0) - (b.at || 0));
+  delete best.seq;
+  if (!best.stops.length) throw noPoi();
+  return best;
+}
+function dropWeakest(seq) {
+  const fillers = seq.filter(e => !e.poi);
+  if (fillers.length) { const i = seq.indexOf(fillers[fillers.length - 1]); return seq.filter((_, k) => k !== i); }
+  let wi = -1, ws = Infinity;
+  seq.forEach((e, i) => { if (e.poi && e.poi.score < ws) { ws = e.poi.score; wi = i; } });
+  return seq.filter((_, k) => k !== wi);
+}
+
 // Grow or shrink a circle of waypoints until the routed loop lands near the target length.
 async function generateLoop(start, targetM, seed, onProgress, router) {
   router = router || osrmRoute;
@@ -533,6 +768,7 @@ const el = {
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
   distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
+  routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'),
   statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop')
 };
 
@@ -585,11 +821,42 @@ function drawRoute(route) {
   }
   if (startMarker) startMarker.remove();
   startMarker = L.marker(latlngs[0], { icon: startIcon(), interactive: false, keyboard: false, zIndexOffset: 500 }).addTo(map);
+  drawStops(route);
+}
+let stopMarkers = [];
+function stopIcon(n, done) { return L.divIcon({ className: '', html: '<div class="stop-pin' + (done ? ' done' : '') + '">' + n + '</div>', iconSize: [26, 26], iconAnchor: [13, 13] }); }
+function drawStops(route) {
+  stopMarkers.forEach(m => m.remove()); stopMarkers = [];
+  if (!route.stops) return;
+  route.stops.forEach((s, i) => {
+    const m = L.marker([s.lat, s.lon], { icon: stopIcon(i + 1, s.visited), keyboard: false, zIndexOffset: 600 }).addTo(map);
+    m.on('click', () => openCard(i));
+    stopMarkers.push(m);
+  });
+}
+function renderStopsList() {
+  const r = state.route, list = el.stopsList;
+  if (!r || !r.stops || !r.stops.length) { list.hidden = true; list.innerHTML = ''; return; }
+  list.innerHTML = '';
+  r.stops.forEach((s, i) => {
+    const b = document.createElement('button'); b.className = 'stop-row'; b.type = 'button';
+    const pin = document.createElement('span'); pin.className = 'stop-pin' + (s.visited ? ' done' : ''); pin.textContent = i + 1;
+    const t = document.createElement('span'); t.className = 't';
+    const name = document.createElement('b'); name.textContent = s.title;
+    const sub = document.createElement('small'); sub.textContent = s.desc || 'Wikipedia';
+    t.appendChild(name); t.appendChild(sub);
+    const d = document.createElement('span'); d.className = 'dist'; d.textContent = s.at != null ? fmtKm(s.at) + ' km' : '';
+    b.appendChild(pin); b.appendChild(t); b.appendChild(d);
+    b.addEventListener('click', () => openCard(i));
+    list.appendChild(b);
+  });
+  list.hidden = false;
 }
 function fitRoute(route) {
   setSheetHeight();
   const b = L.latLngBounds(route.coords);
-  map.fitBounds(b, { paddingTopLeft: [24, 64], paddingBottomRight: [24, el.sheet.offsetHeight + 24], animate: false });
+  const pb = Math.min(el.sheet.offsetHeight + 24, Math.round(map.getSize().y * 0.6));
+  map.fitBounds(b, { paddingTopLeft: [24, 64], paddingBottomRight: [24, pb], animate: false });
 }
 function placeStartMarker(p) {
   if (startMarker) startMarker.remove();
@@ -612,8 +879,26 @@ function updateMeMarker(p, acc, heading) {
 const state = {
   mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
-  orsKey: String(store.get('orsKey', '') || '').trim(), green: store.get('green', true) !== false, orsOn: store.get('orsOn', true) !== false
+  orsKey: String(store.get('orsKey', '') || '').trim(), green: store.get('green', true) !== false, orsOn: store.get('orsOn', true) !== false,
+  kind: store.get('kind', 'loop') === 'tour' ? 'tour' : 'loop'
 };
+
+// ---------- Walk kind ----------
+const elK = { loop: $('kindLoop'), tour: $('kindTour') };
+function renderKind() {
+  const t = state.kind === 'tour';
+  elK.loop.classList.toggle('on', !t); elK.tour.classList.toggle('on', t);
+  elK.loop.setAttribute('aria-selected', String(!t)); elK.tour.setAttribute('aria-selected', String(t));
+  el.btnGo.textContent = t ? 'Make me a tour' : 'Make me a loop';
+  renderPlanHint();
+}
+function renderPlanHint() {
+  const gps = !state.start || state.start.mode === 'gps';
+  const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
+  el.planHint.textContent = state.kind === 'tour' ? base + ' Tours go past the most-read Wikipedia places nearby, so they work best in towns and cities.' : base;
+}
+elK.loop.addEventListener('click', () => { state.kind = 'loop'; store.set('kind', 'loop'); renderKind(); });
+elK.tour.addEventListener('click', () => { state.kind = 'tour'; store.set('kind', 'tour'); renderKind(); });
 
 // ---------- Routing settings ----------
 const elS = { btnSettings: $('btnSettings'), settings: $('settings'), orsKey: $('orsKey'), greenToggle: $('greenToggle'), orsToggle: $('orsToggle'), btnSaveKey: $('btnSaveKey'), btnClearKey: $('btnClearKey'), keyStatus: $('keyStatus'), modeTag: $('modeTag'), modeText: $('modeText') };
@@ -660,7 +945,7 @@ function setStart(p, mode, acc) {
   placeStartMarker(p);
   el.btnGo.disabled = state.busy;
   el.startLabel.textContent = mode === 'gps' ? 'Starting from your location' : 'Starting from the pin';
-  el.planHint.textContent = mode === 'gps' ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
+  renderPlanHint();
 }
 
 // ---------- GPS ----------
@@ -713,21 +998,29 @@ async function makeLoop(seed) {
   el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths…';
   el.btnShuffle.innerHTML = '<span class="spinner"></span> Shuffling';
   try {
-    const progress = (n, max) => { el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths… ' + n + '/' + max; };
-    const mode = routingMode();
+    const progress = (n, max, text) => { el.btnGo.innerHTML = '<span class="spinner"></span> ' + (text || 'Finding paths…') + ' ' + n + '/' + max; };
+    const mode = routingMode(), start = state.start.p;
+    const routeWith = async router => {
+      if (state.kind === 'tour') {
+        try { const r = await generateTour(start, targetM, seed, router, progress); r.kind = 'tour'; return r; }
+        catch (e) { if (e.kind !== 'nopoi') throw e; toast(e.message, 6000); }
+      }
+      const r = await generateLoop(start, targetM, seed, progress, router); r.kind = 'loop'; return r;
+    };
     let route;
-    if (mode === 'osrm') route = await generateLoop(state.start.p, targetM, seed, progress);
+    if (mode === 'osrm') route = await routeWith(osrmRoute);
     else {
       const key = state.orsKey, green = mode === 'green';
-      try { route = await generateLoop(state.start.p, targetM, seed, progress, pts => orsRoute(pts, key, green)); }
+      try { route = await routeWith(pts => orsRoute(pts, key, green)); }
       catch (e) {
-        if (e.kind === 'key') { toast(e.message + ' Using standard routing for this loop.', 7000); route = await generateLoop(state.start.p, targetM, seed, progress); route.fallback = true; }
+        if (e.kind === 'key') { toast(e.message + ' Using standard routing for this loop.', 7000); route = await routeWith(osrmRoute); route.fallback = true; }
         else throw e;
       }
     }
     route.startMode = state.start.mode; route.createdAt = Date.now(); route.profile = null; route.ascent = null; route.descent = null;
     route.mode = route.fallback ? 'osrm' : (mode === 'green' && orsGreenRejected ? 'ors' : mode);
     if (mode === 'green' && orsGreenRejected && !route.fallback) toast('OpenRouteService refused the green preference, so this loop is trail routing without it.', 7000);
+    if (route.stops) loadExtracts(route);
     if (route.eles) {
       const n = route.coords.length, step = Math.max(1, Math.floor(n / 200)), ds = [], ele = [];
       for (let i = 0; i < n; i += step) { ds.push(route.cum[i]); ele.push(route.eles[i]); }
@@ -749,7 +1042,16 @@ async function makeLoop(seed) {
   }
 }
 function serializeRoute(r) {
-  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode };
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, stops: r.stops || null };
+}
+async function loadExtracts(route) {
+  try {
+    const ex = await wikiExtracts(route.stops.map(s => s.pageid));
+    if (state.route !== route) return;
+    route.stops.forEach(s => { s.extract = trimText(ex[s.pageid] || '', 900) || null; });
+    store.set('route', serializeRoute(route));
+    if (cardIdx >= 0 && !elC.card.hidden) openCard(cardIdx);
+  } catch (e) { /* cards fall back to the short description */ }
 }
 function reviveRoute(s) {
   if (!s || !s.coords || s.coords.length < 2) return null;
@@ -771,6 +1073,8 @@ async function loadElevation(route) {
 }
 function renderRouteStats() {
   const r = state.route; if (!r) return;
+  el.routeEyebrow.textContent = r.stops && r.stops.length ? 'Your tour · ' + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : 'Your loop';
+  renderStopsList();
   el.stDist.textContent = fmtKm(r.total) + ' km';
   el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
   el.stTime.textContent = '~' + fmtTime(estimateMinutes(r.total, r.ascent || 0));
@@ -818,7 +1122,7 @@ async function exportGpx() {
   const r = state.route; if (!r) return;
   const d = new Date(), stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const name = 'Loop ' + fmtKm(r.total) + ' km ' + stamp, fname = 'loop-' + fmtKm(r.total) + 'km-' + stamp + '.gpx';
-  const gpx = buildGpx(name, r.coords, r.cum, r.profile);
+  const gpx = buildGpx(name, r.coords, r.cum, r.profile, r.stops);
   try {
     const file = new File([gpx], fname, { type: 'application/gpx+xml' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
@@ -831,6 +1135,67 @@ async function exportGpx() {
   } catch (e) { toast('Could not export the GPX on this browser.'); }
 }
 el.btnGpx.addEventListener('click', exportGpx);
+
+// ---------- Stop cards ----------
+const elC = { card: $('stopCard'), num: $('cardNum'), title: $('cardTitle'), desc: $('cardDesc'), close: $('cardClose'), img: $('cardImg'), text: $('cardText'), speak: $('btnSpeak'), link: $('cardLink'), prev: $('btnPrevStop'), next: $('btnNextStop') };
+let cardIdx = -1;
+function openCard(i) {
+  const r = state.route; if (!r || !r.stops || !r.stops[i]) return;
+  const s = r.stops[i]; cardIdx = i;
+  stopSpeaking();
+  elC.num.textContent = i + 1; elC.title.textContent = s.title; elC.desc.textContent = s.desc || '';
+  if (s.thumb) { elC.img.src = s.thumb; elC.img.hidden = false; } else { elC.img.hidden = true; elC.img.removeAttribute('src'); }
+  elC.text.textContent = s.extract || (s.extract === null && !r.extractsFailed ? 'Loading the summary…' : 'No summary available. Open Wikipedia for more.');
+  elC.link.href = s.url;
+  elC.prev.disabled = i === 0; elC.next.disabled = i === r.stops.length - 1;
+  elC.card.hidden = false; elC.card.scrollTop = 0;
+}
+function closeCard() { elC.card.hidden = true; cardIdx = -1; stopSpeaking(); }
+elC.close.addEventListener('click', closeCard);
+elC.prev.addEventListener('click', () => { if (cardIdx > 0) openCard(cardIdx - 1); });
+elC.next.addEventListener('click', () => { if (state.route && cardIdx < state.route.stops.length - 1) openCard(cardIdx + 1); });
+
+function stopSpeaking() { try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {} elC.speak.textContent = 'Read aloud'; }
+elC.speak.addEventListener('click', () => {
+  if (!('speechSynthesis' in window)) { toast('This browser has no voice to read with.'); return; }
+  if (speechSynthesis.speaking) { stopSpeaking(); return; }
+  const s = state.route && state.route.stops[cardIdx]; if (!s) return;
+  const text = s.title + '. ' + (s.desc ? s.desc + '. ' : '') + (s.extract || '');
+  try {
+    const u = new SpeechSynthesisUtterance(text); u.lang = 'en-GB'; u.rate = 1;
+    const voices = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
+    const v = voices.find(v => v.lang === 'en-GB') || voices.find(v => /^en/.test(v.lang)); if (v) u.voice = v;
+    u.onend = u.onerror = () => { elC.speak.textContent = 'Read aloud'; };
+    speechSynthesis.speak(u); elC.speak.textContent = 'Stop reading';
+  } catch (e) { toast('Could not start the voice.'); }
+});
+el.nextStop.addEventListener('click', () => { const r = state.route; if (!r || !r.stops) return; const i = r.stops.findIndex(s => !s.visited); openCard(i >= 0 ? i : r.stops.length - 1); });
+
+function checkStops(p) {
+  const r = state.route; if (!r || !r.stops) return;
+  r.stops.forEach((s, i) => {
+    if (s.visited) return;
+    if (haversine(p, [s.lat, s.lon]) < Math.max(45, (s.gap || 0) + 30)) {
+      s.visited = true;
+      if (stopMarkers[i]) stopMarkers[i].setIcon(stopIcon(i + 1, true));
+      buzz([120, 60, 120]); beep(1); openCard(i); renderStopsList();
+      store.set('route', serializeRoute(r));
+    }
+  });
+}
+function renderNextStop(progress) {
+  const r = state.route, n = el.nextStop;
+  if (!r || !r.stops || !r.stops.length) { n.hidden = true; return; }
+  const s = r.stops.find(s => !s.visited);
+  n.innerHTML = '';
+  if (!s) { n.textContent = 'All stops seen. Back to the start.'; n.hidden = false; return; }
+  const along = s.at != null ? s.at - progress : null;
+  const d = along != null && along > -60 ? Math.max(0, along) : (state.lastFix ? haversine(state.lastFix.p, [s.lat, s.lon]) : null);
+  n.appendChild(document.createTextNode('Next: '));
+  const b = document.createElement('b'); b.textContent = s.title; n.appendChild(b);
+  if (d != null) n.appendChild(document.createTextNode(' · ' + (d >= 1000 ? fmtKm(d) + ' km' : Math.round(d) + ' m')));
+  n.hidden = false;
+}
 
 // ---------- Walk ----------
 let wakeLock = null, audioCtx = null;
@@ -862,9 +1227,11 @@ function startWalk(resume) {
   const proj = localProjector(r.coords[0]);
   const saved = resume ? store.get('walk', null) : null;
   state.walk = { proj, xy: r.coords.map(proj), progress: saved ? saved.progress : 0, lastIdx: 0, offCount: 0, onCount: 0, off: false, startedAt: saved ? saved.startedAt : Date.now(), finished: false };
+  if (!resume && r.stops) { r.stops.forEach(s => { s.visited = false; }); drawStops(r); store.set('route', serializeRoute(r)); }
   state.following = true; el.btnRecentre.hidden = true;
+  closeCard();
   unlockAudio(); keepAwake(true);
-  showView('walk'); updateWalkUi(null);
+  showView('walk'); updateWalkUi(null); renderNextStop(state.walk.progress);
   store.set('walk', { active: true, progress: state.walk.progress, startedAt: state.walk.startedAt });
   setStatus('wait', 'Waiting for GPS');
   if (state.watchId != null) navigator.geolocation.clearWatch(state.watchId);
@@ -877,7 +1244,7 @@ function startWalk(resume) {
 function stopWalk() {
   if (state.watchId != null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
   keepAwake(false); store.del('walk'); state.walk = null;
-  el.banner.hidden = true;
+  el.banner.hidden = true; closeCard();
   if (doneLine && restLine && state.route) { doneLine.setLatLngs([]); restLine.setLatLngs(state.route.coords); }
   showView('route'); renderRouteStats(); fitRoute(state.route);
   el.btnStart.textContent = 'Start walking'; el.btnStart.dataset.resume = '0';
@@ -925,6 +1292,7 @@ function onFix(pos) {
   }
   store.set('walk', { active: true, progress: w.progress, startedAt: w.startedAt });
   updateWalkUi(w.progress);
+  checkStops(p); renderNextStop(w.progress);
 }
 function updateWalkUi(progress) {
   const r = state.route, w = state.walk; if (!r || !w) return;
@@ -959,12 +1327,14 @@ if (savedRoute) {
   drawRoute(savedRoute);
   setStart(savedRoute.coords[0], savedRoute.startMode || 'manual');
   showView('route'); renderRouteStats(); fitRoute(savedRoute);
-  if (savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; el.routeHint.textContent = 'You were mid-walk on this loop.'; }
+  if (savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; el.routeHint.textContent = 'You were mid-walk on this ' + (savedRoute.stops ? 'tour.' : 'loop.'); }
   else { el.btnStart.dataset.resume = '0'; }
   if (!savedRoute.profile) loadElevation(savedRoute);
+  if (savedRoute.stops && savedRoute.stops.some(s => s.extract === null)) loadExtracts(savedRoute);
 } else {
   showView('plan');
 }
+renderKind();
 locateOnce({ centre: !savedRoute });
 })();
 </script>
