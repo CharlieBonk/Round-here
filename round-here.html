@@ -134,11 +134,10 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
 .check input{width:20px;height:20px;accent-color:var(--accent);margin:0}
 
 /* Tour mode */
-.seg{display:flex;background:var(--panel-2);border-radius:12px;padding:3px;gap:3px}
-.seg button{flex:1;border:0;background:transparent;border-radius:10px;padding:9px 10px;font-weight:700;font-size:14px;cursor:pointer;color:var(--muted)}
-.seg button.on{background:var(--panel);color:var(--fg);box-shadow:0 1px 4px rgba(0,0,0,.15)}
-.themes{margin-top:-4px}
-.themes button{flex:1;text-align:center;padding:7px 8px;white-space:nowrap}
+.themes{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-left:calc(-1 * max(18px,env(safe-area-inset-left,0px)));margin-right:calc(-1 * max(18px,env(safe-area-inset-right,0px)));padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+.themes::-webkit-scrollbar{display:none}
+.themes button{flex:none;text-align:center;padding:7px 10px;font-size:13px;white-space:nowrap}
+.themes{gap:5px}
 .themes button.locked{color:var(--muted);border-style:dashed}
 .stops{display:flex;flex-direction:column;gap:2px;max-height:168px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;padding:4px}
 .stop-row{display:flex;align-items:center;gap:10px;border:0;background:transparent;text-align:left;padding:6px 8px;border-radius:9px;cursor:pointer;width:100%;color:inherit}
@@ -214,12 +213,9 @@ a.btn{text-decoration:none}
 
     <!-- PLAN -->
     <div class="view" id="viewPlan">
-      <div class="seg" role="tablist" aria-label="Walk type">
-        <button id="kindLoop" class="on" role="tab" aria-selected="true">Just walk</button>
-        <button id="kindTour" role="tab" aria-selected="false">Tour the sights</button>
-      </div>
-      <div class="chips themes" id="themes" hidden aria-label="Tour theme">
-        <button data-theme="all" class="on">Everything</button>
+      <div class="chips themes" id="themes" aria-label="Walk type">
+        <button data-theme="walk">Just walk</button>
+        <button data-theme="all" class="on">Sights</button>
         <button data-theme="history">History</button>
         <button data-theme="pubs">Pubs</button>
         <button data-theme="green">Green</button>
@@ -273,7 +269,7 @@ a.btn{text-decoration:none}
         </div>
         <p id="placesStatus"></p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v3.4</p>
+        <p class="tag" id="version">Round Here v3.5</p>
       </div>
     </div>
 
@@ -657,7 +653,7 @@ async function osrmRoute(points) {
   if (!res.ok) throw new RouteError('http', 'Routing service error (' + res.status + ').');
   let j;
   try { j = await res.json(); } catch (e) { throw new RouteError('http', 'The routing service sent an unreadable reply. Try again.'); }
-  if (j.code !== 'Ok' || !j.routes || !j.routes[0]) throw new RouteError('noroute', 'No route');
+  if (j.code !== 'Ok' || !j.routes || !j.routes[0]) { const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(j.message || ''); if (m) e.badIndex = +m[1]; throw e; }
   const r = j.routes[0];
   return { coords: r.geometry.coordinates.map(c => [c[1], c[0]]), distance: r.distance };
 }
@@ -683,7 +679,8 @@ async function orsRoute(points, key, green) {
   if (orsGreenRejected) green = false;
   const body = {
     coordinates: points.map(p => [+p[1].toFixed(6), +p[0].toFixed(6)]),
-    preference: 'recommended', elevation: true, instructions: false
+    preference: 'recommended', elevation: true, instructions: false,
+    radiuses: points.map(() => -1)
   };
   if (green) body.options = { profile_params: { weightings: { green: 1, quiet: 0.6 } } };
   let res;
@@ -696,7 +693,7 @@ async function orsRoute(points, key, green) {
   if (res.status === 404 && orsProfile === 'foot-hiking') { orsProfile = 'foot-walking'; return orsRoute(points, key, green); }
   if (!res.ok || !j) {
     const code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || '';
-    if (code === 2009 || code === 2010) throw new RouteError('noroute', 'No route');
+    if (code === 2009 || code === 2010) { const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(msg); if (m) e.badIndex = +m[1]; throw e; }
     if (green && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, key, false); }
     throw new RouteError('http', 'OpenRouteService error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
   }
@@ -821,7 +818,7 @@ async function wikiCandidates(start, radius) {
 const GEOAPIFY = 'https://api.geoapify.com/v2/places';
 const PLACE_CATS = {
   pubs: 'catering.pub,catering.biergarten',
-  green: 'leisure.park,leisure.park.garden,leisure.park.nature_reserve,natural.forest,natural.water.inland,natural.mountain.peak,natural.mountain.hill,natural.heath_moor,natural.protected_area,beach,tourism.attraction.viewpoint,national_park'
+  green: 'leisure.park,leisure.park.garden,leisure.park.nature_reserve,natural.forest,natural.mountain.peak,natural.mountain.hill,natural.heath_moor,beach,tourism.attraction.viewpoint'
 };
 const THEME_NEEDS_KEY = { pubs: true, green: true };
 const diag = { last: '' };
@@ -872,7 +869,7 @@ async function placesCandidates(start, radius, theme, key, rng) {
   return out;
 }
 
-const THEME_LABEL = { all: '', history: 'history', pubs: 'pub', green: 'green' };
+const THEME_LABEL = { walk: '', all: '', history: 'history', pubs: 'pub', green: 'green' };
 // Pick the best-read places within reach (by theme), thread a loop through them, fit the length.
 async function generateTour(start, targetM, seed, router, onProgress, theme, placesKey) {
   theme = theme || 'all';
@@ -918,7 +915,10 @@ async function generateTour(start, targetM, seed, router, onProgress, theme, pla
     catch (e) {
       if (e.kind !== 'noroute') throw e;
       if (seq.filter(e => e.poi).length <= 1) throw noPoi();
-      seq = dropWeakest(seq); continue;
+      // The router may name the waypoint it couldn't reach (wps index); otherwise drop the worst detour for its value.
+      const bi = e.badIndex;
+      seq = (bi != null && bi >= 1 && bi <= seq.length) ? seq.filter((_, k) => k !== bi - 1) : dropWeakest(seq, start);
+      continue;
     }
     const cum = cumulative(res.coords), total = cum[cum.length - 1];
     const err = Math.abs(total - targetM) / targetM;
@@ -927,7 +927,7 @@ async function generateTour(start, targetM, seed, router, onProgress, theme, pla
     if (err < 0.12) break;
     if (total > targetM * 1.12) {
       if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi)) break;
-      seq = dropWeakest(seq);
+      seq = dropWeakest(seq, start);
     } else {
       const st = stretchLoop(start, seq.map(e => e.p), (targetM - total));
       seq.splice(st.index, 0, { p: st.p, poi: null });
@@ -946,11 +946,19 @@ async function generateTour(start, targetM, seed, router, onProgress, theme, pla
   if (!best.stops.length) throw noPoi();
   return best;
 }
-function dropWeakest(seq) {
+// Remove a filler first; otherwise the stop whose straight-line detour is worst for its value.
+function dropWeakest(seq, start) {
   const fillers = seq.filter(e => !e.poi);
   if (fillers.length) { const i = seq.indexOf(fillers[fillers.length - 1]); return seq.filter((_, k) => k !== i); }
-  let wi = -1, ws = Infinity;
-  seq.forEach((e, i) => { if (e.poi && e.poi.score < ws) { ws = e.poi.score; wi = i; } });
+  const pts = [start].concat(seq.map(e => e.p), [start]);
+  let wi = -1, wv = -Infinity;
+  seq.forEach((e, i) => {
+    if (!e.poi) return;
+    const a = pts[i], p = pts[i + 1], b = pts[i + 2];
+    const saving = haversine(a, p) + haversine(p, b) - haversine(a, b);
+    const v = (saving + 200) / Math.max(0.2, e.poi.score);
+    if (v > wv) { wv = v; wi = i; }
+  });
   return seq.filter((_, k) => k !== wi);
 }
 
@@ -1116,20 +1124,18 @@ const state = {
   mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
   orsKey: String(store.get('orsKey', '') || '').trim(), green: store.get('green', true) !== false, orsOn: store.get('orsOn', true) !== false,
-  kind: store.get('kind', 'loop') === 'tour' ? 'tour' : 'loop',
-  theme: ['all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all',
+  theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all',
   placesKey: String(store.get('placesKey', '') || '').trim()
 };
 if (THEME_NEEDS_KEY[state.theme] && !state.placesKey) state.theme = 'all';
+state.kind = state.theme === 'walk' ? 'loop' : 'tour';
 
-// ---------- Walk kind + theme ----------
-const elK = { loop: $('kindLoop'), tour: $('kindTour'), themes: $('themes') };
+// ---------- Walk type (one chip row: plain loop or a themed tour) ----------
+const elK = { themes: $('themes') };
 const LOCK_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-1px;margin-left:4px" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 function renderKind() {
+  state.kind = state.theme === 'walk' ? 'loop' : 'tour';
   const t = state.kind === 'tour';
-  elK.loop.classList.toggle('on', !t); elK.tour.classList.toggle('on', t);
-  elK.loop.setAttribute('aria-selected', String(!t)); elK.tour.setAttribute('aria-selected', String(t));
-  elK.themes.hidden = !t;
   elK.themes.querySelectorAll('button').forEach(b => {
     const locked = !!THEME_NEEDS_KEY[b.dataset.theme] && !state.placesKey;
     b.classList.toggle('on', b.dataset.theme === state.theme);
@@ -1154,12 +1160,10 @@ elK.themes.addEventListener('click', e => {
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
   const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
-  const tour = { all: ' Tours go past the most-read places nearby, so they work best in towns and cities.', history: ' Routes past churches, castles, monuments and old buildings nearby.', pubs: ' Routes past pubs nearby. Pace yourself.', green: ' Routes through parks, gardens and viewpoints nearby.' };
-  if (state.kind === 'tour' && !state.placesKey) tour.all += ' Pubs and Green need a free places key (see Settings).';
-  el.planHint.textContent = state.kind === 'tour' ? base + tour[state.theme] : base;
+  const tour = { walk: ' A plain loop with no stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
+  if (state.theme === 'all' && !state.placesKey) tour.all += ' Pubs and Green need a free places key (see Settings).';
+  el.planHint.textContent = base + (tour[state.theme] || '');
 }
-elK.loop.addEventListener('click', () => { state.kind = 'loop'; store.set('kind', 'loop'); renderKind(); });
-elK.tour.addEventListener('click', () => { state.kind = 'tour'; store.set('kind', 'tour'); renderKind(); });
 
 // ---------- Routing settings ----------
 const elS = { btnSettings: $('btnSettings'), settings: $('settings'), orsKey: $('orsKey'), greenToggle: $('greenToggle'), orsToggle: $('orsToggle'), btnSaveKey: $('btnSaveKey'), btnClearKey: $('btnClearKey'), keyStatus: $('keyStatus'), modeTag: $('modeTag'), modeText: $('modeText'),
