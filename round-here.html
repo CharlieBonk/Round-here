@@ -258,7 +258,7 @@ a.btn{text-decoration:none}
         </div>
         <p id="keyStatus"></p>
         <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
-        <p class="tag" id="version">Round Here v3.1</p>
+        <p class="tag" id="version">Round Here v3.2</p>
       </div>
     </div>
 
@@ -806,7 +806,7 @@ async function wikiCandidates(start, radius) {
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 async function osmAround(start, radius, selectors) {
   const around = '(around:' + Math.round(radius) + ',' + start[0].toFixed(5) + ',' + start[1].toFixed(5) + ')';
-  const q = '[out:json][timeout:25];(' + selectors.map(s => 'nwr' + s + '["name"]' + around + ';').join('') + ');out center tags 200;';
+  const q = '[out:json][timeout:25];(' + selectors.map(s => 'nwr' + s + '["name"]' + around + ';').join('') + ');out center 200;';
   for (const url of OVERPASS) {
     try {
       const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: timeoutSignal(25000) });
@@ -855,7 +855,6 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
   const usesOsm = theme === 'pubs' || theme === 'green';
   const [wikiRes, osmRes] = await Promise.allSettled([wikiCandidates(start, radius), usesOsm ? osmCandidates(start, radius, theme, rng) : Promise.resolve([])]);
   if (wikiRes.status === 'rejected' && (!usesOsm || osmRes.status === 'rejected')) throw wikiRes.reason;
-  if (osmRes.status === 'rejected' && wikiRes.status === 'fulfilled' && usesOsm && !wikiRes.value.length) throw osmRes.reason;
   let pois = [];
   if (wikiRes.status === 'fulfilled') {
     for (const c of wikiRes.value) {
@@ -872,7 +871,7 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
       if (pois.some(c => c.kind === 'wiki' && haversine(c.p, o.p) < 80)) continue;
       pois.push(o);
     }
-  }
+  } else if (usesOsm && !pois.length) throw osmRes.reason;
   if (!pois.length) throw noPoi();
   const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
   const chosen = planTour(start, pois, targetM, maxStops);
