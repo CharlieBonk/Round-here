@@ -236,15 +236,14 @@ a.btn{text-decoration:none}
       <p class="hint" id="planHint">Starts and ends right where you are. Long-press the map to start somewhere else.</p>
       <div class="mode-row">
         <span class="tag" id="modeTag"><span class="dot"></span><span id="modeText">Green routing</span></span>
-        <button class="link" id="btnSettings">Settings</button>
+        <button class="link" id="btnSettings">About</button>
       </div>
       <div class="settings" id="settings" hidden>
-        <div class="eyebrow">Settings</div>
-        <label class="check"><input type="checkbox" id="greenToggle" checked> Prefer green and quiet paths</label>
-        <p>Loops use the hiking profile and, when ticked, lean towards parks, woods and quiet streets rather than the shortest line. Untick it for the most direct paths.</p>
-        <p>Routing and place lookups go through Round Here's own service, so there is nothing to sign up for. Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
+        <div class="eyebrow">About</div>
+        <p>Loops use a hiking profile that leans towards parks, woods and quiet streets rather than the shortest line. Tours pick their stops from Wikipedia and OpenStreetMap. Nothing to sign up for.</p>
+        <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v4.1</p>
+        <p class="tag" id="version">Round Here v4.2</p>
       </div>
     </div>
 
@@ -1154,7 +1153,7 @@ function updateMeMarker(p, acc, heading) {
 const state = {
   mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
-  green: store.get('green', true) !== false,
+  green: true,
   theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all'
 };
 state.kind = state.theme === 'walk' ? 'loop' : 'tour';
@@ -1181,17 +1180,11 @@ function renderPlanHint() {
 }
 
 // ---------- Settings ----------
-const elS = { btnSettings: $('btnSettings'), settings: $('settings'), greenToggle: $('greenToggle'), modeTag: $('modeTag'), modeText: $('modeText') };
-function routingMode() { return state.green ? 'green' : 'ors'; }
-function renderRoutingMode() {
-  const m = routingMode();
-  elS.modeTag.className = 'tag' + (m === 'green' ? ' green' : '');
-  elS.modeText.textContent = m === 'green' ? 'Green routing' : 'Trail routing';
-  elS.greenToggle.checked = state.green;
-}
+const elS = { btnSettings: $('btnSettings'), settings: $('settings'), modeTag: $('modeTag'), modeText: $('modeText') };
+function routingMode() { return 'green'; }
+function renderRoutingMode() { elS.modeTag.className = 'tag green'; elS.modeText.textContent = 'Green routing'; }
 function renderDiag() { const d = $('diag'); d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
 elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; renderDiag(); requestAnimationFrame(setSheetHeight); });
-elS.greenToggle.addEventListener('change', () => { state.green = elS.greenToggle.checked; store.set('green', state.green); renderRoutingMode(); toast(state.green ? 'Green routing on' : 'Trail routing, most direct paths'); });
 renderRoutingMode();
 el.distRange.value = state.targetKm;
 
