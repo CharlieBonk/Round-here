@@ -214,6 +214,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
         </div>
         <p id="keyStatus"></p>
         <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
+        <p class="tag" id="version">Round Here v2.3</p>
       </div>
     </div>
 
@@ -472,7 +473,7 @@ async function orsRoute(points, key, green) {
   if (!res.ok || !j) {
     const code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || '';
     if (code === 2009 || code === 2010) throw new RouteError('noroute', 'No route');
-    if (green && res.status === 400 && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, key, false); }
+    if (green && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, key, false); }
     throw new RouteError('http', 'OpenRouteService error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
   }
   const f = j.features && j.features[0];
