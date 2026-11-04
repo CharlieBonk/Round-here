@@ -269,7 +269,7 @@ a.btn{text-decoration:none}
         </div>
         <p id="placesStatus"></p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v3.5</p>
+        <p class="tag" id="version">Round Here v3.6</p>
       </div>
     </div>
 
@@ -330,6 +330,11 @@ a.btn{text-decoration:none}
       <div class="row">
         <button class="btn secondary" id="btnPrevStop">‹ Previous</button>
         <button class="btn secondary" id="btnNextStop">Next ›</button>
+      </div>
+      <div class="row" id="skipRow">
+        <button class="btn secondary" id="btnSkipStop">
+          <svg viewBox="0 0 24 24"><path d="M5 5l14 14"/><path d="M19 5L5 19"/></svg>Skip this stop
+        </button>
       </div>
       <p class="hint">Text and photo from Wikipedia (CC BY-SA).</p>
     </div>
@@ -905,7 +910,17 @@ async function generateTour(start, targetM, seed, router, onProgress, theme, pla
   const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
   const chosen = planTour(start, pois, targetM, maxStops);
   if (!chosen.length) throw noPoi();
-  let seq = chosen.map(c => ({ p: c.p, poi: c }));
+  const seq = chosen.map(c => ({ p: c.p, poi: c }));
+  const best = await fitTour(start, seq, targetM, router, onProgress, seed);
+  if (!best) throw noPoi();
+  best.stops = buildStops(best, start);
+  delete best.seq;
+  best.theme = theme; best.targetM = targetM; best.pool = pois.map(slimPoi); best.skipped = [];
+  if (!best.stops.length) throw noPoi();
+  return best;
+}
+// Route a sequence of stops (and fillers) from the start and back, trimming or stretching until the length fits. Null if nothing routes.
+async function fitTour(start, seq, targetM, router, onProgress, seed) {
   let best = null;
   for (let attempt = 0; attempt < 4; attempt++) {
     onProgress && onProgress(2 + attempt, 5, 'Routing the tour…');
@@ -914,7 +929,7 @@ async function generateTour(start, targetM, seed, router, onProgress, theme, pla
     try { res = await router(wps); }
     catch (e) {
       if (e.kind !== 'noroute') throw e;
-      if (seq.filter(e => e.poi).length <= 1) throw noPoi();
+      if (seq.filter(e => e.poi).length <= 1) return best;
       // The router may name the waypoint it couldn't reach (wps index); otherwise drop the worst detour for its value.
       const bi = e.badIndex;
       seq = (bi != null && bi >= 1 && bi <= seq.length) ? seq.filter((_, k) => k !== bi - 1) : dropWeakest(seq, start);
@@ -933,17 +948,43 @@ async function generateTour(start, targetM, seed, router, onProgress, theme, pla
       seq.splice(st.index, 0, { p: st.p, poi: null });
     }
   }
-  if (!best) throw noPoi();
+  return best;
+}
+function buildStops(best, start) {
   const proj = localProjector(start), xy = best.coords.map(proj);
-  best.stops = best.seq.filter(e => e.poi).map(e => {
+  return best.seq.filter(e => e.poi).map(e => {
     const near = nearestOnRoute(xy, proj(e.p), 0, xy.length - 1);
     const at = near.idx >= 0 ? best.cum[near.idx] + near.t * (best.cum[near.idx + 1] - best.cum[near.idx]) : null;
     const c = e.poi;
     return { id: c.id, title: c.title, desc: c.desc || '', thumb: c.thumb || null, lat: c.p[0], lon: c.p[1], url: c.url, link: c.link || 'Wikipedia', lang: c.lang || null, pageid: c.pageid || null, wiki: c.wiki || null, osmText: c.osmText || null, at, gap: near.idx >= 0 ? Math.round(near.dist) : 0, extract: null, visited: false };
   }).sort((a, b) => (a.at || 0) - (b.at || 0));
+}
+// What a candidate needs to carry for later swaps (kept with the route).
+function slimPoi(c) { return { id: c.id, kind: c.kind, lang: c.lang || null, pageid: c.pageid || null, title: c.title, p: c.p, desc: c.desc || '', descEn: c.descEn == null ? null : c.descEn, thumb: c.thumb || null, wiki: c.wiki || null, osmText: c.osmText || null, url: c.url, link: c.link || 'Wikipedia', score: c.score }; }
+// Replace one stop with the best unused candidate that still fits the distance, then re-route. Returns the new route, or null if nothing changed.
+async function swapStop(route, stopId, router, onProgress) {
+  const start = route.coords[0], targetM = route.targetM, pool = route.pool || [];
+  const remaining = route.stops.filter(s => s.id !== stopId);
+  const skipped = (route.skipped || []).concat([stopId]);
+  const used = new Set(remaining.map(s => s.id).concat(skipped));
+  const seq = remaining.map(s => ({ p: [s.lat, s.lon], poi: pool.find(c => c.id === s.id) || slimPoi(Object.assign({ p: [s.lat, s.lon], score: 1 }, s)) }));
+  const pts = [start].concat(seq.map(e => e.p), [start]), budget = targetM / 1.3, curLen = loopLength(pts);
+  let bestC = null, bestV = -Infinity, bestIns = null;
+  for (const c of pool) {
+    if (used.has(c.id)) continue;
+    const ins = insertionCost(pts, c.p);
+    if (curLen + ins.cost > budget) continue;
+    const v = c.score / (1 + ins.cost / 800);
+    if (v > bestV) { bestV = v; bestC = c; bestIns = ins; }
+  }
+  if (bestC) seq.splice(bestIns.at - 1, 0, { p: bestC.p, poi: bestC });
+  if (!seq.some(e => e.poi)) return null;
+  const best = await fitTour(start, seq, targetM, router, onProgress, route.seed);
+  if (!best) return null;
+  best.stops = buildStops(best, start);
+  for (const s of best.stops) { const old = route.stops.find(o => o.id === s.id); if (old) { s.extract = old.extract; s.thumb = s.thumb || old.thumb; } }
   delete best.seq;
-  best.theme = theme;
-  if (!best.stops.length) throw noPoi();
+  Object.assign(best, { theme: route.theme, targetM, pool, skipped, kind: 'tour', mode: route.mode, startMode: route.startMode, createdAt: Date.now(), profile: null, ascent: null, descent: null, replaced: bestC ? bestC.title : null });
   return best;
 }
 // Remove a filler first; otherwise the stop whose straight-line detour is worst for its value.
@@ -1307,19 +1348,8 @@ async function makeLoop(seed) {
     route.startMode = state.start.mode; route.createdAt = Date.now(); route.profile = null; route.ascent = null; route.descent = null;
     route.mode = route.fallback ? 'osrm' : (mode === 'green' && orsGreenRejected ? 'ors' : mode);
     if (mode === 'green' && orsGreenRejected && !route.fallback) toast('OpenRouteService refused the green preference, so this loop is trail routing without it.', 7000);
-    if (route.stops) loadExtracts(route);
     try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-    if (route.eles) {
-      const n = route.coords.length, step = Math.max(1, Math.floor(n / 200)), ds = [], ele = [];
-      for (let i = 0; i < n; i += step) { ds.push(route.cum[i]); ele.push(route.eles[i]); }
-      if (ds[ds.length - 1] !== route.cum[n - 1]) { ds.push(route.cum[n - 1]); ele.push(route.eles[n - 1]); }
-      route.profile = { ds, ele }; const ad = ascentDescent(ele); route.ascent = ad.up; route.descent = ad.down;
-      delete route.eles;
-    }
-    state.route = route;
-    drawRoute(route); showView('route'); renderRouteStats(); fitRoute(route);
-    store.set('route', serializeRoute(route));
-    if (!route.profile) loadElevation(route);
+    adoptRoute(route);
   } catch (e) {
     diag.error = e && e.message || 'error';
     toast(e.message || 'Something went wrong making the loop.', 6000);
@@ -1334,8 +1364,47 @@ async function makeLoop(seed) {
     el.btnShuffle.disabled = false;
   }
 }
+// Make a freshly routed loop or tour the current one: elevation from the router if it came with it, draw, show, persist, fetch what's missing.
+function adoptRoute(route) {
+  if (route.eles) {
+    const n = route.coords.length, step = Math.max(1, Math.floor(n / 200)), ds = [], ele = [];
+    for (let i = 0; i < n; i += step) { ds.push(route.cum[i]); ele.push(route.eles[i]); }
+    if (ds[ds.length - 1] !== route.cum[n - 1]) { ds.push(route.cum[n - 1]); ele.push(route.eles[n - 1]); }
+    route.profile = { ds, ele }; const ad = ascentDescent(ele); route.ascent = ad.up; route.descent = ad.down;
+    delete route.eles;
+  }
+  state.route = route;
+  drawRoute(route); showView('route'); renderRouteStats(); fitRoute(route);
+  store.set('route', serializeRoute(route));
+  if (!route.profile) loadElevation(route);
+  if (route.stops && route.stops.some(s => s.extract == null)) loadExtracts(route);
+}
 function serializeRoute(r) {
-  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null };
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null };
+}
+// "Skip this stop" from the card: swap it for the next best candidate and re-route, keeping the other stops.
+async function skipStop(i) {
+  const r = state.route;
+  if (!r || !r.stops || !r.stops[i] || !r.pool || !r.targetM || state.busy || state.mode !== 'route') return;
+  const gone = r.stops[i];
+  state.busy = true; el.btnShuffle.disabled = true;
+  const label = elC.skip.innerHTML; elC.skip.disabled = true; elC.skip.innerHTML = '<span class="spinner"></span> Re-routing…';
+  try {
+    const mode = routingMode();
+    const router = mode === 'osrm' || r.mode === 'osrm' ? osrmRoute : pts => orsRoute(pts, state.orsKey, mode === 'green');
+    const progress = (n, max) => { elC.skip.innerHTML = '<span class="spinner"></span> Re-routing… ' + n + '/' + max; };
+    let next;
+    try { next = await swapStop(r, gone.id, router, progress); }
+    catch (e) { if (e.kind === 'key') next = await swapStop(r, gone.id, osrmRoute, progress); else throw e; }
+    if (!next) { toast('That was the last stop. Shuffle or make a new tour instead.', 5000); return; }
+    next.mode = r.mode; next.shared = false;
+    closeCard(); adoptRoute(next);
+    toast(next.replaced ? 'Swapped ' + gone.title + ' for ' + next.replaced + '.' : 'Dropped ' + gone.title + '; nothing else fits the distance.', 5000);
+  } catch (e) {
+    toast(e.message || 'Could not re-route without that stop.', 6000);
+  } finally {
+    state.busy = false; el.btnShuffle.disabled = false; elC.skip.disabled = false; elC.skip.innerHTML = label;
+  }
 }
 // Summaries come from each stop's own Wikipedia (by page id, or by title for OpenStreetMap places that link to an article).
 async function loadExtracts(route) {
@@ -1502,7 +1571,7 @@ async function exportGpx() {
 el.btnGpx.addEventListener('click', exportGpx);
 
 // ---------- Stop cards ----------
-const elC = { card: $('stopCard'), num: $('cardNum'), title: $('cardTitle'), desc: $('cardDesc'), close: $('cardClose'), img: $('cardImg'), text: $('cardText'), speak: $('btnSpeak'), link: $('cardLink'), prev: $('btnPrevStop'), next: $('btnNextStop') };
+const elC = { card: $('stopCard'), num: $('cardNum'), title: $('cardTitle'), desc: $('cardDesc'), close: $('cardClose'), img: $('cardImg'), text: $('cardText'), speak: $('btnSpeak'), link: $('cardLink'), prev: $('btnPrevStop'), next: $('btnNextStop'), skip: $('btnSkipStop'), skipRow: $('skipRow') };
 let cardIdx = -1;
 function openCard(i) {
   const r = state.route; if (!r || !r.stops || !r.stops[i]) return;
@@ -1513,8 +1582,10 @@ function openCard(i) {
   elC.text.textContent = s.extract || s.osmText || (s.extract === null ? 'Loading the summary…' : 'No summary available for this one.');
   elC.link.href = s.url; elC.link.textContent = s.link || 'Wikipedia'; elC.link.hidden = !s.url || s.url === '#';
   elC.prev.disabled = i === 0; elC.next.disabled = i === r.stops.length - 1;
+  elC.skipRow.hidden = !(state.mode === 'route' && r.pool && r.targetM && !r.shared);
   elC.card.hidden = false; elC.card.scrollTop = 0;
 }
+elC.skip.addEventListener('click', () => { if (cardIdx >= 0) skipStop(cardIdx); });
 function closeCard() { elC.card.hidden = true; cardIdx = -1; stopSpeaking(); }
 elC.close.addEventListener('click', closeCard);
 elC.prev.addEventListener('click', () => { if (cardIdx > 0) openCard(cardIdx - 1); });
