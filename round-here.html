@@ -137,6 +137,8 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
 .seg{display:flex;background:var(--panel-2);border-radius:12px;padding:3px;gap:3px}
 .seg button{flex:1;border:0;background:transparent;border-radius:10px;padding:9px 10px;font-weight:700;font-size:14px;cursor:pointer;color:var(--muted)}
 .seg button.on{background:var(--panel);color:var(--fg);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.themes{margin-top:-4px}
+.themes button{flex:1;text-align:center;padding:7px 8px}
 .stops{display:flex;flex-direction:column;gap:2px;max-height:168px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;padding:4px}
 .stop-row{display:flex;align-items:center;gap:10px;border:0;background:transparent;text-align:left;padding:6px 8px;border-radius:9px;cursor:pointer;width:100%;color:inherit}
 .stop-row:active{background:var(--panel-2)}
@@ -195,6 +197,9 @@ a.btn{text-decoration:none}
     <button class="icon-btn" id="btnLayer" aria-label="Switch map style" title="Map style">
       <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
     </button>
+    <button class="icon-btn" id="btnShare" aria-label="Share this route" title="Share" hidden>
+      <svg viewBox="0 0 24 24"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+    </button>
   </div>
 
   <div class="banner" id="banner" hidden>
@@ -211,6 +216,12 @@ a.btn{text-decoration:none}
       <div class="seg" role="tablist" aria-label="Walk type">
         <button id="kindLoop" class="on" role="tab" aria-selected="true">Just walk</button>
         <button id="kindTour" role="tab" aria-selected="false">Tour the sights</button>
+      </div>
+      <div class="chips themes" id="themes" hidden aria-label="Tour theme">
+        <button data-theme="all" class="on">Everything</button>
+        <button data-theme="history">History</button>
+        <button data-theme="pubs">Pubs</button>
+        <button data-theme="green">Green</button>
       </div>
       <div class="row between">
         <div class="eyebrow">How far today?</div>
@@ -247,7 +258,7 @@ a.btn{text-decoration:none}
         </div>
         <p id="keyStatus"></p>
         <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
-        <p class="tag" id="version">Round Here v3.0</p>
+        <p class="tag" id="version">Round Here v3.1</p>
       </div>
     </div>
 
@@ -462,10 +473,78 @@ function planWaypoints(start, r, bearingDeg, clockwise, K, jitter) {
 // ---- Tour planning ----
 // Wikipedia short descriptions that mean "not a place you can stand at".
 const PLACE_EXCLUDE = /\b(town|city|village|hamlet|suburb|civil parish|parish|district|borough|county|ward|constituency|neighbourhood|region|settlement|river|stream|brook|road|street|motorway|avenue|company|business|brand|primary school|secondary school|grammar school|high school|academy|football club|cricket club|rugby club|hockey club|sports club|sports team|radio station|newspaper|magazine|bus route|railway line|electoral|census|surname|given name|politician|footballer|cricketer|actor|singer|writer|musician|band|album|song|film|television|series|episode|novel|murder|disaster|accident|explosion|crash|shooting|riot|wikimedia|disambiguation)\b/i;
-function isPlaceLike(title, desc) {
+// The same idea for descriptions on other languages' Wikipedias (settlements, rivers, companies, schools, clubs, people, media).
+const PLACE_EXCLUDE_ML = /\b(município|municipio|municipalité|municipality|freguesia|concelho|comune|commune|gemeinde|gemeente|gmina|obec|ciudad|cidade|città|ville|stadt|stad|miasto|město|dorf|aldeia|pueblo|villaggio|quartier|bairro|barrio|quartiere|stadtteil|wijk|dzielnica|distrito|distretto|bezirk|província|provincia|provinz|região|región|région|regione|comarca|rio|río|rivière|fluss|fiume|rivier|rzeka|empresa|entreprise|unternehmen|azienda|bedrijf|firma|escola|escuela|école|schule|scuola|szkoła|liceu|liceo|lycée|clube|futebol|fútbol|calcio|fußball|voetbal|équipe|verein|político|politico|politicien|politiker|polityk|escritor|escritora|écrivain|schriftsteller|scrittore|schrijver|pisarz|cantor|cantora|cantante|chanteur|chanteuse|sänger|zanger|ator|atriz|actriz|acteur|actrice|schauspieler|attore|attrice|aktor|futebolista|futbolista|footballeur|fußballspieler|calciatore|voetballer|piłkarz|jogador|jugador|joueur|spieler|giocatore|speler|banda|gruppo|groupe|álbum|canção|canción|chanson|lied|canzone|filme|película|série|romance|novela|romanzo|desambiguação|desambiguación|homonymie|begriffsklärung|disambigua|doorverwijspagina|ujednoznacznienie|jornal|periódico|journal|zeitung|giornale|krant|estrada|carretera|straße|strada|straat|rua|calle|rue|avenida|allee)\b/i;
+function isPlaceLike(title, desc, lang) {
   if (!title || /^list of/i.test(title)) return false;
   if (!desc) return true;
-  return !PLACE_EXCLUDE.test(desc);
+  if (PLACE_EXCLUDE.test(desc)) return false;
+  return (lang || 'en') === 'en' ? true : !PLACE_EXCLUDE_ML.test(desc);
+}
+// Themes, matched against the English description where there is one, else the local one, plus the title.
+const HIST_RE = /\b(church|cathedral|abbey|minster|chapel|priory|monastery|convent|castle|fort|fortress|citadel|palace|manor|country house|stately home|hall|tower|gate|gatehouse|city walls?|town walls?|monument|memorial|statue|cross|obelisk|museum|gallery|theatre|theater|opera house|ruins?|roman|medieval|georgian|victorian|tudor|norman|listed building|historic|heritage|cemetery|mausoleum|tomb|bridge|aqueduct|viaduct|mill|windmill|lighthouse|town hall|guildhall|courthouse|library|university|college|synagogue|mosque|temple|shrine|basilica|igreja|iglesia|église|eglise|kirche|chiesa|kerk|kościół|kostel|castelo|castillo|château|chateau|burg|schloss|castello|kasteel|zamek|hrad|mosteiro|monasterio|monastère|kloster|monastero|klooster|museu|museo|musée|musee|muzeum|palácio|palacio|palais|palast|palazzo|paleis|pałac|catedral|cathédrale|kathedrale|cattedrale|kathedraal|katedra|ponte|puente|pont|brücke|brucke|brug|torre|turm|toren|wieża|monumento|denkmal|pomnik|ruína|ruinas|ruines|ruine|rovine|capela|capilla|chapelle|kapelle|cappella|kapel|kaplica|forte|fortaleza|festung|teatro|théâtre|praça|plaza|platz|piazza|plein|templo|tempel|tempio|mesquita|mezquita|mosquée|moschee|moschea|sinagoga|synagogue|synagoge|basílica|basilique|basilika)\b/i;
+const GREEN_RE = /\b(park|parks|garden|gardens|nature reserve|reserve|common|heath|moor|woods?|woodland|forest|lake|loch|reservoir|pond|canal|waterfall|beach|bay|cliffs?|hills?|downs|mountain|peak|summit|viewpoint|meadow|wetland|marsh|estuary|island|orchard|arboretum|botanic(al)?|parque|parc|jardim|jardín|jardin|garten|giardino|tuin|ogród|bosque|forêt|foret|wald|bosco|lago|lac|reserva|réserve|naturschutzgebiet|riserva|natuurgebied|rezerwat|praia|playa|plage|strand|spiaggia|miradouro|mirador|belvédère|aussichtspunkt|belvedere|uitzichtpunt|colina|cerro|colline|hügel|collina|heuvel|serra|sierra|montagne|berg|monte|montaña|cascata|cascada|cascade|wasserfall|ilha|isla|île|insel|isola|eiland|wyspa)\b/i;
+const PUB_RE = /\b(pub|public house|inn|tavern|brewery|beer|taberna|cervejaria|cervecería|brasserie|bierhaus|brauerei|birreria|kroeg|café-bar)\b/i;
+function matchesTheme(theme, c) {
+  if (!theme || theme === 'all') return true;
+  if (c.kind === 'osm') return true;
+  const text = (c.descEn != null ? c.descEn : (c.desc || '')) + ' ' + (c.title || '');
+  if (theme === 'history') return HIST_RE.test(text);
+  if (theme === 'green') return GREEN_RE.test(text);
+  if (theme === 'pubs') return PUB_RE.test(text);
+  return true;
+}
+// Douglas-Peucker in local metres; keeps the shape within tol metres.
+function simplify(coords, tol) {
+  if (coords.length < 3) return coords.slice();
+  const proj = localProjector(coords[0]), xy = coords.map(proj), keep = new Uint8Array(coords.length);
+  keep[0] = keep[coords.length - 1] = 1;
+  const stack = [[0, coords.length - 1]];
+  while (stack.length) {
+    const seg = stack.pop(), a = seg[0], b = seg[1];
+    if (b - a < 2) continue;
+    const ax = xy[a][0], ay = xy[a][1], dx = xy[b][0] - ax, dy = xy[b][1] - ay, l2 = dx * dx + dy * dy;
+    let md = -1, mi = -1;
+    for (let i = a + 1; i < b; i++) {
+      const px = xy[i][0] - ax, py = xy[i][1] - ay;
+      let t = l2 ? (px * dx + py * dy) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(px - t * dx, py - t * dy);
+      if (d > md) { md = d; mi = i; }
+    }
+    if (md > tol) { keep[mi] = 1; stack.push([a, mi], [mi, b]); }
+  }
+  return coords.filter((_, i) => keep[i]);
+}
+// Google polyline encoding, precision 5.
+function encodePolyline(coords) {
+  const enc = v => { v = v < 0 ? ~(v << 1) : v << 1; let s = ''; while (v >= 0x20) { s += String.fromCharCode((0x20 | (v & 0x1f)) + 63); v >>= 5; } return s + String.fromCharCode(v + 63); };
+  let out = '', pLat = 0, pLon = 0;
+  for (const c of coords) { const lat = Math.round(c[0] * 1e5), lon = Math.round(c[1] * 1e5); out += enc(lat - pLat) + enc(lon - pLon); pLat = lat; pLon = lon; }
+  return out;
+}
+function decodePolyline(str) {
+  const out = []; let i = 0, lat = 0, lon = 0;
+  while (i < str.length) {
+    let b, shift = 0, r = 0;
+    do { b = str.charCodeAt(i++) - 63; r |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (r & 1) ? ~(r >> 1) : (r >> 1); shift = 0; r = 0;
+    do { b = str.charCodeAt(i++) - 63; r |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lon += (r & 1) ? ~(r >> 1) : (r >> 1);
+    out.push([lat / 1e5, lon / 1e5]);
+  }
+  return out;
+}
+// Share payload: a compact array form of the route and its stops.
+function packRoute(r) {
+  return { v: 1, k: r.kind || 'loop', th: r.theme || null, c: encodePolyline(simplify(r.coords, 4)), s: (r.stops || []).map(s => [Math.round(s.lat * 1e5), Math.round(s.lon * 1e5), s.title, s.desc || '', s.id || '', s.wiki || '']) };
+}
+function stopFromShare(a) {
+  const id = a[4] || '', wiki = a[5] || null, lat = a[0] / 1e5, lon = a[1] / 1e5;
+  const m = /^([a-z\-]+):(\d+)$/.exec(id);
+  const osm = id.startsWith('osm:') ? id.slice(4) : null;
+  return { id, title: a[2] || 'Stop', desc: a[3] || '', thumb: null, lat, lon, lang: m ? m[1] : null, pageid: m ? +m[2] : null, wiki, osmText: null,
+    url: m ? 'https://' + m[1] + '.wikipedia.org/?curid=' + m[2] : wiki ? 'https://' + wiki.split(':')[0] + '.wikipedia.org/wiki/' + encodeURIComponent(wiki.slice(wiki.indexOf(':') + 1).replace(/ /g, '_')) : osm ? 'https://www.openstreetmap.org/' + osm : '#',
+    link: m || wiki ? 'Wikipedia' : 'OpenStreetMap', at: null, gap: 0, extract: null, visited: false };
 }
 function scorePoi(views, hasImage, rng) {
   return (Math.log10(1 + (views || 0)) + (hasImage ? 0.4 : 0)) * (rng ? 0.6 + 0.8 * rng() : 1);
@@ -614,59 +693,185 @@ async function orsRoute(points, key, green) {
   return { coords, eles, distance: f.properties && f.properties.summary ? f.properties.summary.distance : null };
 }
 
-// ---------- Wikipedia ----------
-const WIKI = 'https://en.wikipedia.org/w/api.php';
-async function wikiGet(params) {
+// ---------- Wikipedia (any language) ----------
+const COUNTRY_LANG = { pt: 'pt', br: 'pt', ao: 'pt', mz: 'pt', es: 'es', mx: 'es', ar: 'es', cl: 'es', co: 'es', pe: 'es', uy: 'es', ec: 'es', bo: 'es', cu: 'es', do: 'es', gt: 'es', cr: 'es', pa: 'es', ve: 'es', fr: 'fr', mc: 'fr', lu: 'fr', de: 'de', at: 'de', ch: 'de', li: 'de', it: 'it', sm: 'it', va: 'it', nl: 'nl', be: 'nl', pl: 'pl', cz: 'cs', sk: 'sk', hu: 'hu', ro: 'ro', md: 'ro', bg: 'bg', gr: 'el', cy: 'el', tr: 'tr', ru: 'ru', ua: 'uk', by: 'be', se: 'sv', no: 'no', dk: 'da', fi: 'fi', is: 'is', ee: 'et', lv: 'lv', lt: 'lt', hr: 'hr', si: 'sl', rs: 'sr', ba: 'bs', me: 'sr', mk: 'mk', al: 'sq', jp: 'ja', cn: 'zh', tw: 'zh', hk: 'zh', kr: 'ko', th: 'th', vn: 'vi', id: 'id', my: 'ms', il: 'he', ir: 'fa', sa: 'ar', ae: 'ar', eg: 'ar', ma: 'ar', tn: 'ar', dz: 'ar', jo: 'ar', lb: 'ar', qa: 'ar', kw: 'ar', om: 'ar', pk: 'ur', bd: 'bn', ge: 'ka', am: 'hy', az: 'az', kz: 'kk', np: 'ne', lk: 'si' };
+const langCache = {};
+async function localLang(start) {
+  const key = start[0].toFixed(1) + ',' + start[1].toFixed(1);
+  if (langCache[key]) return langCache[key];
+  const saved = store.get('lang.' + key, null); if (saved) { langCache[key] = saved; return saved; }
+  let lang = 'en';
+  try {
+    const res = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=3&lat=' + start[0].toFixed(4) + '&lon=' + start[1].toFixed(4), { signal: timeoutSignal(8000), headers: { 'Accept-Language': 'en' } });
+    if (res.ok) { const j = await res.json(); const cc = ((j.address && j.address.country_code) || '').toLowerCase(); lang = COUNTRY_LANG[cc] || 'en'; }
+  } catch (e) { /* English only */ }
+  langCache[key] = lang; store.set('lang.' + key, lang);
+  return lang;
+}
+function wikiUrl(lang, pageid) { return 'https://' + lang + '.wikipedia.org/?curid=' + pageid; }
+function wikiTitleUrl(wiki) { const i = wiki.indexOf(':'); const lang = i > 0 ? wiki.slice(0, i) : 'en', t = i > 0 ? wiki.slice(i + 1) : wiki; return 'https://' + lang + '.wikipedia.org/wiki/' + encodeURIComponent(t.replace(/ /g, '_')); }
+async function wikiGet(lang, params) {
   const q = new URLSearchParams(Object.assign({ format: 'json', formatversion: '2', origin: '*' }, params));
   let res;
-  try { res = await fetch(WIKI + '?' + q.toString(), { signal: timeoutSignal(15000) }); }
+  try { res = await fetch('https://' + lang + '.wikipedia.org/w/api.php?' + q.toString(), { signal: timeoutSignal(15000) }); }
   catch (e) { throw new RouteError('network', 'Could not reach Wikipedia to find landmarks. Check your signal and try again.'); }
   if (!res.ok) throw new RouteError('http', 'Wikipedia error (' + res.status + ').');
   return res.json();
 }
-async function wikiGeo(start, radius, limit) {
-  const j = await wikiGet({ action: 'query', list: 'geosearch', gscoord: start[0].toFixed(5) + '|' + start[1].toFixed(5), gsradius: Math.round(radius), gslimit: limit });
+function batches(arr, n) { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; }
+async function wikiGeo(lang, start, radius, limit) {
+  const j = await wikiGet(lang, { action: 'query', list: 'geosearch', gscoord: start[0].toFixed(5) + '|' + start[1].toFixed(5), gsradius: Math.round(radius), gslimit: limit });
   return (j.query && j.query.geosearch) || [];
 }
-async function wikiDetails(pageids) {
-  const batches = [];
-  for (let i = 0; i < pageids.length; i += 50) batches.push(pageids.slice(i, i + 50));
-  const results = await Promise.allSettled(batches.map(b => wikiGet({ action: 'query', pageids: b.join('|'), prop: 'description|pageviews|pageimages', pvipdays: 30, piprop: 'thumbnail', pithumbsize: 480, pilimit: 50 })));
+function readDetails(pg) {
+  let views = 0; if (pg.pageviews) for (const k in pg.pageviews) views += pg.pageviews[k] || 0;
+  return { pageid: pg.pageid, title: pg.title, desc: pg.description || '', views, thumb: pg.thumbnail ? pg.thumbnail.source : null };
+}
+const DETAIL_PROPS = { prop: 'description|pageviews|pageimages', pvipdays: 30, piprop: 'thumbnail', pithumbsize: 480, pilimit: 50 };
+async function wikiDetails(lang, pageids) {
+  const results = await Promise.allSettled(batches(pageids, 50).map(b => wikiGet(lang, Object.assign({ action: 'query', pageids: b.join('|') }, DETAIL_PROPS))));
   const out = {};
+  for (const r of results) { if (r.status !== 'fulfilled') continue; for (const pg of ((r.value.query && r.value.query.pages) || [])) if (!pg.missing) out[pg.pageid] = readDetails(pg); }
+  if (!Object.keys(out).length && pageids.length) throw new RouteError('network', 'Could not load landmark details from Wikipedia. Try again.');
+  return out;
+}
+// English articles looked up by title (for places found on another language's Wikipedia).
+async function wikiByTitles(lang, titles) {
+  const out = {};
+  const results = await Promise.allSettled(batches(titles, 50).map(b => wikiGet(lang, Object.assign({ action: 'query', titles: b.join('|'), redirects: 1 }, DETAIL_PROPS))));
   for (const r of results) {
     if (r.status !== 'fulfilled') continue;
-    for (const pg of ((r.value.query && r.value.query.pages) || [])) {
-      let views = 0; if (pg.pageviews) for (const k in pg.pageviews) views += pg.pageviews[k] || 0;
-      out[pg.pageid] = { desc: pg.description || '', views, thumb: pg.thumbnail ? pg.thumbnail.source : null };
-    }
+    const q = r.value.query || {}, pages = {};
+    for (const pg of (q.pages || [])) if (!pg.missing) pages[pg.title.toLowerCase()] = readDetails(pg);
+    const norm = {}, redir = {};
+    for (const n of (q.normalized || [])) norm[n.from] = n.to;
+    for (const n of (q.redirects || [])) redir[n.from] = n.to;
+    for (const t of titles) { const a = norm[t] || t, b = redir[a] || a, pg = pages[b.toLowerCase()]; if (pg) out[t.toLowerCase()] = pg; }
   }
-  if (!Object.keys(out).length && batches.length) throw new RouteError('network', 'Could not load landmark details from Wikipedia. Try again.');
   return out;
 }
-async function wikiExtracts(pageids) {
+async function wikiLangLinks(lang, pageids, to) {
   const out = {};
-  for (let i = 0; i < pageids.length; i += 20) {
-    const j = await wikiGet({ action: 'query', pageids: pageids.slice(i, i + 20).join('|'), prop: 'extracts', exintro: 1, explaintext: 1, exlimit: 20 });
-    for (const pg of ((j.query && j.query.pages) || [])) out[pg.pageid] = pg.extract || '';
+  const results = await Promise.allSettled(batches(pageids, 50).map(b => wikiGet(lang, { action: 'query', pageids: b.join('|'), prop: 'langlinks', lllang: to, lllimit: 50 })));
+  for (const r of results) { if (r.status !== 'fulfilled') continue; for (const pg of ((r.value.query && r.value.query.pages) || [])) { const l = pg.langlinks && pg.langlinks[0]; if (l && l.title) out[pg.pageid] = l.title; } }
+  return out;
+}
+async function wikiExtracts(lang, sel) {
+  const out = {};
+  const keys = sel.pageids ? sel.pageids : sel.titles;
+  for (const b of batches(keys, 20)) {
+    const params = { action: 'query', prop: 'extracts', exintro: 1, explaintext: 1, exlimit: 20, redirects: 1 };
+    if (sel.pageids) params.pageids = b.join('|'); else params.titles = b.join('|');
+    const j = await wikiGet(lang, params);
+    for (const pg of ((j.query && j.query.pages) || [])) { if (pg.missing) continue; out[pg.pageid] = pg.extract || ''; if (pg.title) out['t:' + pg.title.toLowerCase()] = pg.extract || ''; }
   }
   return out;
+}
+async function wikiPlaces(lang, start, radius, limit) {
+  const geo = await wikiGeo(lang, start, radius, limit);
+  if (!geo.length) return [];
+  const det = await wikiDetails(lang, geo.map(g => g.pageid));
+  return geo.filter(g => det[g.pageid]).map(g => { const d = det[g.pageid]; return Object.assign({}, d, { lat: g.lat, lon: g.lon, title: d.title || g.title }); });
+}
+// Candidates from English Wikipedia plus the local-language one, merged on their English article where one exists.
+async function wikiCandidates(start, radius) {
+  const lang = await localLang(start);
+  const en = await wikiPlaces('en', start, radius, 300);
+  const all = en.map(x => ({ id: 'en:' + x.pageid, kind: 'wiki', lang: 'en', pageid: x.pageid, title: x.title, p: [x.lat, x.lon], desc: x.desc, descEn: x.desc, views: x.views, thumb: x.thumb, url: wikiUrl('en', x.pageid), link: 'Wikipedia' }));
+  if (lang === 'en') return all;
+  try {
+    const loc = await wikiPlaces(lang, start, radius, 200);
+    if (!loc.length) return all;
+    const links = await wikiLangLinks(lang, loc.map(x => x.pageid), 'en');
+    const enTitles = Array.from(new Set(Object.values(links)));
+    const enInfo = enTitles.length ? await wikiByTitles('en', enTitles) : {};
+    const byEn = new Map(all.map(c => [c.title.toLowerCase(), c]));
+    for (const x of loc) {
+      const et = links[x.pageid], key = et ? et.toLowerCase() : null;
+      const existing = key ? byEn.get(key) : null;
+      if (existing) { existing.views = Math.max(existing.views, x.views); existing.thumb = existing.thumb || x.thumb; continue; }
+      const info = key ? enInfo[key] : null;
+      if (info) {
+        const c = { id: 'en:' + info.pageid, kind: 'wiki', lang: 'en', pageid: info.pageid, title: info.title || et, p: [x.lat, x.lon], desc: info.desc || x.desc, descEn: info.desc || '', views: Math.max(x.views, info.views || 0), thumb: info.thumb || x.thumb, url: wikiUrl('en', info.pageid), link: 'Wikipedia' };
+        all.push(c); byEn.set(key, c);
+      } else {
+        all.push({ id: lang + ':' + x.pageid, kind: 'wiki', lang, pageid: x.pageid, title: x.title, p: [x.lat, x.lon], desc: x.desc, descEn: null, views: x.views, thumb: x.thumb, url: wikiUrl(lang, x.pageid), link: 'Wikipedia' });
+      }
+    }
+  } catch (e) { /* local Wikipedia unavailable: English only */ }
+  return all;
 }
 
-// Pick the best-read Wikipedia places within reach, thread a loop through them, fit the length.
-async function generateTour(start, targetM, seed, router, onProgress) {
+// ---------- OpenStreetMap (pubs, parks, viewpoints) ----------
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+async function osmAround(start, radius, selectors) {
+  const around = '(around:' + Math.round(radius) + ',' + start[0].toFixed(5) + ',' + start[1].toFixed(5) + ')';
+  const q = '[out:json][timeout:25];(' + selectors.map(s => 'nwr' + s + '["name"]' + around + ';').join('') + ');out center tags 200;';
+  for (const url of OVERPASS) {
+    try {
+      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: timeoutSignal(25000) });
+      if (!res.ok) continue;
+      const j = await res.json();
+      return (j.elements || []).map(e => ({ osm: e.type + '/' + e.id, lat: e.lat != null ? e.lat : (e.center && e.center.lat), lon: e.lon != null ? e.lon : (e.center && e.center.lon), tags: e.tags || {} })).filter(e => e.lat != null && e.tags.name);
+    } catch (e) { /* try the next mirror */ }
+  }
+  throw new RouteError('network', 'Could not reach OpenStreetMap for this theme. Check your signal and try again.');
+}
+function osmDescribe(t) {
+  const label = t.amenity === 'pub' ? 'Pub' : t.amenity === 'biergarten' ? 'Beer garden' : t.leisure === 'park' ? 'Park' : t.leisure === 'nature_reserve' ? 'Nature reserve' : t.leisure === 'garden' ? 'Garden' : t.tourism === 'viewpoint' ? 'Viewpoint' : t.natural === 'beach' ? 'Beach' : t.natural === 'peak' ? 'Hill' : 'Place';
+  const bits = [];
+  if (t.description) bits.push(t.description.replace(/\s+/g, ' ').trim().replace(/\.?$/, '.'));
+  if (t['addr:street']) bits.push('On ' + t['addr:street'] + '.');
+  if (t.brewery) bits.push('Brewery: ' + t.brewery + '.');
+  if (t.real_ale === 'yes') bits.push('Serves real ale.');
+  if (t.food === 'yes') bits.push('Serves food.');
+  if (t.outdoor_seating === 'yes' || t.beer_garden === 'yes') bits.push('Outdoor seating.');
+  if (t.historic || t.heritage) bits.push('Recorded as a historic building.');
+  if (t.start_date) bits.push('Dates from ' + t.start_date + '.');
+  if (t.ele && t.natural === 'peak' && !isNaN(+t.ele)) bits.push(Math.round(+t.ele) + ' m above sea level.');
+  if (t.opening_hours) bits.push('Opening hours: ' + t.opening_hours + '.');
+  if (t.operator && t.leisure) bits.push('Looked after by ' + t.operator + '.');
+  return { label: label + (t.brewery ? ' · ' + t.brewery : ''), text: bits.join(' ') };
+}
+async function osmCandidates(start, radius, theme, rng) {
+  const sel = theme === 'pubs' ? ['["amenity"~"^(pub|biergarten)$"]'] : ['["leisure"~"^(park|nature_reserve|garden)$"]', '["tourism"="viewpoint"]', '["natural"~"^(beach|peak)$"]'];
+  const els = await osmAround(start, radius, sel);
+  return els.map(e => {
+    const t = e.tags, d = osmDescribe(t);
+    let wiki = t.wikipedia || null; if (wiki && wiki.indexOf(':') < 0) wiki = 'en:' + wiki;
+    const base = 1 + (wiki || t.wikidata ? 1.5 : 0) + (t.historic || t.heritage ? 0.6 : 0) + (t.real_ale === 'yes' ? 0.2 : 0) + (t.description ? 0.2 : 0);
+    return { id: 'osm:' + e.osm, kind: 'osm', lang: null, pageid: null, title: t.name, p: [e.lat, e.lon], desc: d.label, descEn: d.label, views: 0, thumb: null, wiki, osmText: d.text, url: wiki ? wikiTitleUrl(wiki) : 'https://www.openstreetmap.org/' + e.osm, link: wiki ? 'Wikipedia' : 'OpenStreetMap', score: base * (0.6 + 0.8 * rng()) };
+  });
+}
+
+const THEME_LABEL = { all: '', history: 'history', pubs: 'pub', green: 'green' };
+// Pick the best-read places within reach (by theme), thread a loop through them, fit the length.
+async function generateTour(start, targetM, seed, router, onProgress, theme) {
+  theme = theme || 'all';
   const rng = mulberry32(seed);
-  onProgress && onProgress(1, 5, 'Finding landmarks…');
+  onProgress && onProgress(1, 5, 'Finding ' + (theme === 'pubs' ? 'pubs…' : theme === 'green' ? 'green spaces…' : 'landmarks…'));
   const radius = Math.min(10000, Math.max(700, targetM * 0.4));
-  const geo = await wikiGeo(start, radius, 300);
-  const noPoi = () => new RouteError('nopoi', 'No landmarks within reach here, so this is a plain loop.');
-  if (!geo.length) throw noPoi();
-  const det = await wikiDetails(geo.map(g => g.pageid));
-  const pois = [];
-  for (const g of geo) {
-    const d = det[g.pageid]; if (!d) continue;
-    if (!isPlaceLike(g.title, d.desc)) continue;
-    if (haversine(start, [g.lat, g.lon]) < 30) continue;
-    pois.push({ pageid: g.pageid, title: g.title, p: [g.lat, g.lon], desc: d.desc, views: d.views, thumb: d.thumb, score: scorePoi(d.views, !!d.thumb, rng) });
+  const noPoi = () => new RouteError('nopoi', theme === 'pubs' ? 'No pubs within reach here, so this is a plain loop.' : theme === 'green' ? 'No parks or viewpoints within reach here, so this is a plain loop.' : theme === 'history' ? 'No historic places within reach here, so this is a plain loop.' : 'No landmarks within reach here, so this is a plain loop.');
+  const usesOsm = theme === 'pubs' || theme === 'green';
+  const [wikiRes, osmRes] = await Promise.allSettled([wikiCandidates(start, radius), usesOsm ? osmCandidates(start, radius, theme, rng) : Promise.resolve([])]);
+  if (wikiRes.status === 'rejected' && (!usesOsm || osmRes.status === 'rejected')) throw wikiRes.reason;
+  if (osmRes.status === 'rejected' && wikiRes.status === 'fulfilled' && usesOsm && !wikiRes.value.length) throw osmRes.reason;
+  let pois = [];
+  if (wikiRes.status === 'fulfilled') {
+    for (const c of wikiRes.value) {
+      if (!isPlaceLike(c.title, c.descEn != null ? c.descEn : c.desc, c.descEn != null ? 'en' : c.lang)) continue;
+      if (haversine(start, c.p) < 30) continue;
+      if (!matchesTheme(theme, c)) continue;
+      c.score = scorePoi(c.views, !!c.thumb, rng);
+      pois.push(c);
+    }
+  }
+  if (osmRes.status === 'fulfilled') {
+    for (const o of osmRes.value) {
+      if (haversine(start, o.p) < 30) continue;
+      if (pois.some(c => c.kind === 'wiki' && haversine(c.p, o.p) < 80)) continue;
+      pois.push(o);
+    }
   }
   if (!pois.length) throw noPoi();
   const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
@@ -681,7 +886,6 @@ async function generateTour(start, targetM, seed, router, onProgress) {
     try { res = await router(wps); }
     catch (e) {
       if (e.kind !== 'noroute') throw e;
-      // A stop the router can't reach: drop the least valuable and retry.
       if (seq.filter(e => e.poi).length <= 1) throw noPoi();
       seq = dropWeakest(seq); continue;
     }
@@ -699,15 +903,15 @@ async function generateTour(start, targetM, seed, router, onProgress) {
     }
   }
   if (!best) throw noPoi();
-  // Attach stops in walking order with their distance along the route.
   const proj = localProjector(start), xy = best.coords.map(proj);
   best.stops = best.seq.filter(e => e.poi).map(e => {
     const near = nearestOnRoute(xy, proj(e.p), 0, xy.length - 1);
     const at = near.idx >= 0 ? best.cum[near.idx] + near.t * (best.cum[near.idx + 1] - best.cum[near.idx]) : null;
     const c = e.poi;
-    return { pageid: c.pageid, title: c.title, desc: c.desc, thumb: c.thumb, lat: c.p[0], lon: c.p[1], url: 'https://en.wikipedia.org/?curid=' + c.pageid, at, gap: near.idx >= 0 ? Math.round(near.dist) : 0, extract: null, visited: false };
+    return { id: c.id, title: c.title, desc: c.desc || '', thumb: c.thumb || null, lat: c.p[0], lon: c.p[1], url: c.url, link: c.link || 'Wikipedia', lang: c.lang || null, pageid: c.pageid || null, wiki: c.wiki || null, osmText: c.osmText || null, at, gap: near.idx >= 0 ? Math.round(near.dist) : 0, extract: null, visited: false };
   }).sort((a, b) => (a.at || 0) - (b.at || 0));
   delete best.seq;
+  best.theme = theme;
   if (!best.stops.length) throw noPoi();
   return best;
 }
@@ -763,7 +967,7 @@ const store = {
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
 const el = {
-  gpsChip: $('gpsChip'), gpsText: $('gpsText'), btnLocate: $('btnLocate'), btnLayer: $('btnLayer'),
+  gpsChip: $('gpsChip'), gpsText: $('gpsText'), btnLocate: $('btnLocate'), btnLayer: $('btnLayer'), btnShare: $('btnShare'),
   banner: $('banner'), bannerText: $('bannerText'), toast: $('toast'), sheet: $('sheet'),
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
   distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
@@ -782,6 +986,7 @@ function setSheetHeight() {
 }
 function showView(name) {
   el.viewPlan.hidden = name !== 'plan'; el.viewRoute.hidden = name !== 'route'; el.viewWalk.hidden = name !== 'walk';
+  el.btnShare.hidden = name === 'plan';
   state.mode = name;
   requestAnimationFrame(setSheetHeight);
 }
@@ -880,22 +1085,28 @@ const state = {
   mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
   orsKey: String(store.get('orsKey', '') || '').trim(), green: store.get('green', true) !== false, orsOn: store.get('orsOn', true) !== false,
-  kind: store.get('kind', 'loop') === 'tour' ? 'tour' : 'loop'
+  kind: store.get('kind', 'loop') === 'tour' ? 'tour' : 'loop',
+  theme: ['all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all'
 };
 
-// ---------- Walk kind ----------
-const elK = { loop: $('kindLoop'), tour: $('kindTour') };
+// ---------- Walk kind + theme ----------
+const elK = { loop: $('kindLoop'), tour: $('kindTour'), themes: $('themes') };
 function renderKind() {
   const t = state.kind === 'tour';
   elK.loop.classList.toggle('on', !t); elK.tour.classList.toggle('on', t);
   elK.loop.setAttribute('aria-selected', String(!t)); elK.tour.setAttribute('aria-selected', String(t));
+  elK.themes.hidden = !t;
+  elK.themes.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === state.theme));
   el.btnGo.textContent = t ? 'Make me a tour' : 'Make me a loop';
   renderPlanHint();
+  requestAnimationFrame(setSheetHeight);
 }
+elK.themes.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.theme = b.dataset.theme; store.set('theme', state.theme); renderKind(); });
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
   const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
-  el.planHint.textContent = state.kind === 'tour' ? base + ' Tours go past the most-read Wikipedia places nearby, so they work best in towns and cities.' : base;
+  const tour = { all: ' Tours go past the most-read places nearby, so they work best in towns and cities.', history: ' Routes past churches, castles, monuments and old buildings nearby.', pubs: ' Routes past pubs nearby. Pace yourself.', green: ' Routes through parks, gardens and viewpoints nearby.' };
+  el.planHint.textContent = state.kind === 'tour' ? base + tour[state.theme] : base;
 }
 elK.loop.addEventListener('click', () => { state.kind = 'loop'; store.set('kind', 'loop'); renderKind(); });
 elK.tour.addEventListener('click', () => { state.kind = 'tour'; store.set('kind', 'tour'); renderKind(); });
@@ -1002,7 +1213,7 @@ async function makeLoop(seed) {
     const mode = routingMode(), start = state.start.p;
     const routeWith = async router => {
       if (state.kind === 'tour') {
-        try { const r = await generateTour(start, targetM, seed, router, progress); r.kind = 'tour'; return r; }
+        try { const r = await generateTour(start, targetM, seed, router, progress, state.theme); r.kind = 'tour'; return r; }
         catch (e) { if (e.kind !== 'nopoi') throw e; toast(e.message, 6000); }
       }
       const r = await generateLoop(start, targetM, seed, progress, router); r.kind = 'loop'; return r;
@@ -1021,6 +1232,7 @@ async function makeLoop(seed) {
     route.mode = route.fallback ? 'osrm' : (mode === 'green' && orsGreenRejected ? 'ors' : mode);
     if (mode === 'green' && orsGreenRejected && !route.fallback) toast('OpenRouteService refused the green preference, so this loop is trail routing without it.', 7000);
     if (route.stops) loadExtracts(route);
+    try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     if (route.eles) {
       const n = route.coords.length, step = Math.max(1, Math.floor(n / 200)), ds = [], ele = [];
       for (let i = 0; i < n; i += step) { ds.push(route.cum[i]); ele.push(route.eles[i]); }
@@ -1042,16 +1254,87 @@ async function makeLoop(seed) {
   }
 }
 function serializeRoute(r) {
-  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, stops: r.stops || null };
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null };
 }
+// Summaries come from each stop's own Wikipedia (by page id, or by title for OpenStreetMap places that link to an article).
 async function loadExtracts(route) {
-  try {
-    const ex = await wikiExtracts(route.stops.map(s => s.pageid));
-    if (state.route !== route) return;
-    route.stops.forEach(s => { s.extract = trimText(ex[s.pageid] || '', 900) || null; });
-    store.set('route', serializeRoute(route));
-    if (cardIdx >= 0 && !elC.card.hidden) openCard(cardIdx);
-  } catch (e) { /* cards fall back to the short description */ }
+  const stops = route.stops; if (!stops) return;
+  const groups = {};
+  stops.forEach(s => {
+    if (s.extract != null) return;
+    if (s.pageid && s.lang) (groups[s.lang] = groups[s.lang] || { ids: [], titles: [] }).ids.push(s.pageid);
+    else if (s.wiki) { const i = s.wiki.indexOf(':'); (groups[s.wiki.slice(0, i)] = groups[s.wiki.slice(0, i)] || { ids: [], titles: [] }).titles.push(s.wiki.slice(i + 1)); }
+  });
+  await Promise.allSettled(Object.keys(groups).map(async lang => {
+    const g = groups[lang];
+    const byId = g.ids.length ? await wikiExtracts(lang, { pageids: g.ids }) : {};
+    const byTitle = g.titles.length ? await wikiExtracts(lang, { titles: g.titles }) : {};
+    stops.forEach(s => {
+      if (s.extract != null) return;
+      if (s.pageid && s.lang === lang && byId[s.pageid] != null) s.extract = trimText(byId[s.pageid], 900);
+      else if (s.wiki && s.wiki.startsWith(lang + ':')) { const t = 't:' + s.wiki.slice(lang.length + 1).replace(/_/g, ' ').toLowerCase(); if (byTitle[t] != null) s.extract = trimText(byTitle[t], 900); }
+    });
+  }));
+  stops.forEach(s => { if (s.extract == null) s.extract = ''; });
+  if (state.route === route) { store.set('route', serializeRoute(route)); if (cardIdx >= 0 && !elC.card.hidden) openCard(cardIdx); }
+}
+// A shared link carries no photos; fetch them for stops that have a Wikipedia page.
+async function loadThumbs(route) {
+  const stops = route.stops; if (!stops) return;
+  const groups = {};
+  stops.forEach(s => { if (!s.thumb && s.pageid && s.lang) (groups[s.lang] = groups[s.lang] || []).push(s.pageid); });
+  await Promise.allSettled(Object.keys(groups).map(async lang => {
+    const det = await wikiDetails(lang, groups[lang]);
+    stops.forEach(s => { if (!s.thumb && s.lang === lang && det[s.pageid]) s.thumb = det[s.pageid].thumb || null; });
+  }));
+  if (state.route === route) { store.set('route', serializeRoute(route)); if (cardIdx >= 0 && !elC.card.hidden) openCard(cardIdx); }
+}
+
+// ---------- Share ----------
+const b64u = {
+  enc(bytes) { let s = ''; for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+  dec(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const bin = atob(s), out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+};
+async function packShare(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  if (typeof CompressionStream === 'function') {
+    try { const cs = new CompressionStream('deflate'); const w = cs.writable.getWriter(); w.write(bytes); w.close(); const buf = await new Response(cs.readable).arrayBuffer(); return 'z' + b64u.enc(new Uint8Array(buf)); } catch (e) {}
+  }
+  return 'j' + b64u.enc(bytes);
+}
+async function unpackShare(s) {
+  const flag = s[0]; let bytes = b64u.dec(s.slice(1));
+  if (flag === 'z') {
+    if (typeof DecompressionStream !== 'function') throw new Error('This link needs a newer browser to open.');
+    const ds = new DecompressionStream('deflate'); const w = ds.writable.getWriter(); w.write(bytes); w.close();
+    bytes = new Uint8Array(await new Response(ds.readable).arrayBuffer());
+  } else if (flag !== 'j') throw new Error('Not a route link.');
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+async function shareRoute() {
+  const r = state.route; if (!r) return;
+  let url;
+  try { url = location.origin + location.pathname + '#r=' + await packShare(packRoute(r)); }
+  catch (e) { toast('Could not build the share link.'); return; }
+  const title = (r.stops ? 'A ' + fmtKm(r.total) + ' km walking tour' : 'A ' + fmtKm(r.total) + ' km loop') + ' on Round Here';
+  try { if (navigator.share) { await navigator.share({ title, text: title + (r.stops ? ' with ' + r.stops.length + ' stops.' : '.'), url }); return; } }
+  catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it to whoever you like.'); }
+  catch (e) { toast('Could not copy the link on this browser.'); }
+}
+el.btnShare.addEventListener('click', shareRoute);
+async function importShared(hash) {
+  const m = /[#&]r=([A-Za-z0-9_\-]+)/.exec(hash || ''); if (!m) return null;
+  const o = await unpackShare(m[1]);
+  if (!o || o.v !== 1 || !o.c) throw new Error('Not a route link.');
+  const coords = decodePolyline(o.c); if (coords.length < 2) throw new Error('Not a route link.');
+  const cum = cumulative(coords);
+  const route = { coords, cum, total: cum[cum.length - 1], seed: 0, overlap: 0, err: 0, startMode: 'manual', createdAt: Date.now(), profile: null, ascent: null, descent: null, mode: 'shared', shared: true, kind: o.k === 'tour' ? 'tour' : 'loop', theme: o.th || null, stops: null };
+  if (Array.isArray(o.s) && o.s.length) {
+    const proj = localProjector(coords[0]), xy = coords.map(proj);
+    route.stops = o.s.map(a => { const s = stopFromShare(a); const near = nearestOnRoute(xy, proj([s.lat, s.lon]), 0, xy.length - 1); if (near.idx >= 0) { s.at = cum[near.idx] + near.t * (cum[near.idx + 1] - cum[near.idx]); s.gap = Math.round(near.dist); } return s; }).sort((a, b) => (a.at || 0) - (b.at || 0));
+  }
+  return route;
 }
 function reviveRoute(s) {
   if (!s || !s.coords || s.coords.length < 2) return null;
@@ -1073,12 +1356,13 @@ async function loadElevation(route) {
 }
 function renderRouteStats() {
   const r = state.route; if (!r) return;
-  el.routeEyebrow.textContent = r.stops && r.stops.length ? 'Your tour · ' + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : 'Your loop';
+  const th = r.theme && THEME_LABEL[r.theme] ? THEME_LABEL[r.theme] + ' ' : '';
+  el.routeEyebrow.textContent = r.stops && r.stops.length ? (r.shared ? 'Shared ' : 'Your ') + th + 'tour · ' + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : (r.shared ? 'Shared loop' : 'Your loop');
   renderStopsList();
   el.stDist.textContent = fmtKm(r.total) + ' km';
   el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
   el.stTime.textContent = '~' + fmtTime(estimateMinutes(r.total, r.ascent || 0));
-  const tag = r.mode === 'green' ? 'Green routing. ' : r.mode === 'ors' ? 'Trail routing. ' : '';
+  const tag = r.shared ? 'Sent to you. It starts at the S pin, so head there first. ' : r.mode === 'green' ? 'Green routing. ' : r.mode === 'ors' ? 'Trail routing. ' : '';
   el.routeHint.textContent = tag + (r.overlap > 0.3 ? 'Some of this loop doubles back on itself. Shuffle for a different shape.' : (r.err > 0.12 ? 'Closest loop the paths here allow; the length is ' + (r.total > state.targetKm * 1000 ? 'longer' : 'shorter') + ' than you asked for.' : ''));
   renderProfile(null);
 }
@@ -1112,8 +1396,8 @@ function renderProfile(progress) {
 el.btnGo.addEventListener('click', () => makeLoop((Math.random() * 1e9) | 0));
 el.btnShuffle.addEventListener('click', () => makeLoop((Math.random() * 1e9) | 0));
 el.btnBack.addEventListener('click', () => {
-  showView('plan');
-  if (!state.start || state.start.mode === 'gps') locateOnce({ centre: true, force: true });
+  showView('plan'); closeCard();
+  if (!state.start || state.start.mode === 'gps' || (state.route && state.route.shared)) locateOnce({ centre: true, force: true });
   else map.setView(state.start.p, Math.max(map.getZoom(), 14), { animate: false });
 });
 
@@ -1145,8 +1429,8 @@ function openCard(i) {
   stopSpeaking();
   elC.num.textContent = i + 1; elC.title.textContent = s.title; elC.desc.textContent = s.desc || '';
   if (s.thumb) { elC.img.src = s.thumb; elC.img.hidden = false; } else { elC.img.hidden = true; elC.img.removeAttribute('src'); }
-  elC.text.textContent = s.extract || (s.extract === null && !r.extractsFailed ? 'Loading the summary…' : 'No summary available. Open Wikipedia for more.');
-  elC.link.href = s.url;
+  elC.text.textContent = s.extract || s.osmText || (s.extract === null ? 'Loading the summary…' : 'No summary available for this one.');
+  elC.link.href = s.url; elC.link.textContent = s.link || 'Wikipedia'; elC.link.hidden = !s.url || s.url === '#';
   elC.prev.disabled = i === 0; elC.next.disabled = i === r.stops.length - 1;
   elC.card.hidden = false; elC.card.scrollTop = 0;
 }
@@ -1318,24 +1602,34 @@ window.addEventListener('resize', () => { setSheetHeight(); if (state.mode === '
 window.addEventListener('orientationchange', () => setTimeout(() => map.invalidateSize(), 300));
 setSheetHeight();
 
-let savedRoute = reviveRoute(store.get('route', null));
-const savedWalk = store.get('walk', null);
-// A loop from a previous day is stale unless a walk on it is still in progress.
-if (savedRoute && !(savedWalk && savedWalk.active) && Date.now() - (savedRoute.createdAt || 0) > 12 * 3600 * 1000) { store.del('route'); savedRoute = null; }
-if (savedRoute) {
-  state.route = savedRoute;
-  drawRoute(savedRoute);
-  setStart(savedRoute.coords[0], savedRoute.startMode || 'manual');
-  showView('route'); renderRouteStats(); fitRoute(savedRoute);
-  if (savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; el.routeHint.textContent = 'You were mid-walk on this ' + (savedRoute.stops ? 'tour.' : 'loop.'); }
-  else { el.btnStart.dataset.resume = '0'; }
-  if (!savedRoute.profile) loadElevation(savedRoute);
-  if (savedRoute.stops && savedRoute.stops.some(s => s.extract === null)) loadExtracts(savedRoute);
-} else {
-  showView('plan');
-}
-renderKind();
-locateOnce({ centre: !savedRoute });
+(async () => {
+  let savedRoute = reviveRoute(store.get('route', null));
+  const savedWalk = store.get('walk', null);
+  // A loop from a previous day is stale unless a walk on it is still in progress.
+  if (savedRoute && !(savedWalk && savedWalk.active) && Date.now() - (savedRoute.createdAt || 0) > 12 * 3600 * 1000) { store.del('route'); savedRoute = null; }
+  // A link someone sent takes priority over whatever was here before.
+  let shared = null;
+  if (/[#&]r=/.test(location.hash)) {
+    try { shared = await importShared(location.hash); } catch (e) { toast(e.message || 'Could not open that route link.', 6000); }
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
+  if (shared) { savedRoute = shared; store.del('walk'); store.set('route', serializeRoute(shared)); }
+  if (savedRoute) {
+    state.route = savedRoute;
+    drawRoute(savedRoute);
+    setStart(savedRoute.coords[0], savedRoute.startMode || 'manual');
+    showView('route'); renderRouteStats(); fitRoute(savedRoute);
+    if (!shared && savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; el.routeHint.textContent = 'You were mid-walk on this ' + (savedRoute.stops ? 'tour.' : 'loop.'); }
+    else { el.btnStart.dataset.resume = '0'; }
+    if (!savedRoute.profile) loadElevation(savedRoute);
+    if (savedRoute.stops && savedRoute.stops.some(s => s.extract === null)) loadExtracts(savedRoute);
+    if (savedRoute.stops && savedRoute.stops.some(s => !s.thumb && s.pageid)) loadThumbs(savedRoute);
+  } else {
+    showView('plan');
+  }
+  renderKind();
+  locateOnce({ centre: !savedRoute });
+})();
 })();
 </script>
 </body>
