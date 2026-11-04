@@ -258,7 +258,8 @@ a.btn{text-decoration:none}
         </div>
         <p id="keyStatus"></p>
         <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
-        <p class="tag" id="version">Round Here v3.2</p>
+        <p class="hint" id="diag"></p>
+        <p class="tag" id="version">Round Here v3.3</p>
       </div>
     </div>
 
@@ -803,19 +804,45 @@ async function wikiCandidates(start, radius) {
 }
 
 // ---------- OpenStreetMap (pubs, parks, viewpoints) ----------
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+// Several public servers, staggered: the unlimited mirror first, the others join if it hasn't answered in a few seconds. First good answer wins.
+const OVERPASS = [['https://overpass.private.coffee/api/interpreter', 0], ['https://overpass-api.de/api/interpreter', 4000], ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 6000]];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function promiseAny(ps) {
+  return new Promise((resolve, reject) => {
+    let left = ps.length; const errs = [];
+    if (!left) return reject(errs);
+    ps.forEach((p, i) => Promise.resolve(p).then(resolve, e => { errs[i] = e; if (--left === 0) reject(errs); }));
+  });
+}
+const diag = { last: '' };
 async function osmAround(start, radius, selectors) {
   const around = '(around:' + Math.round(radius) + ',' + start[0].toFixed(5) + ',' + start[1].toFixed(5) + ')';
-  const q = '[out:json][timeout:25];(' + selectors.map(s => 'nwr' + s + '["name"]' + around + ';').join('') + ');out center 200;';
-  for (const url of OVERPASS) {
-    try {
-      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: timeoutSignal(25000) });
-      if (!res.ok) continue;
-      const j = await res.json();
-      return (j.elements || []).map(e => ({ osm: e.type + '/' + e.id, lat: e.lat != null ? e.lat : (e.center && e.center.lat), lon: e.lon != null ? e.lon : (e.center && e.center.lon), tags: e.tags || {} })).filter(e => e.lat != null && e.tags.name);
-    } catch (e) { /* try the next mirror */ }
-  }
-  throw new RouteError('network', 'Could not reach OpenStreetMap for this theme. Check your signal and try again.');
+  const q = '[out:json][timeout:15];(' + selectors.map(s => 'nwr' + s + '["name"]' + around + ';').join('') + ');out center 200;';
+  const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 16000);
+  let done = false;
+  const attempt = async (url, delay) => {
+    if (delay) await sleep(delay);
+    if (done) throw new Error('skipped');
+    const host = url.replace(/^https:\/\//, '').split('/')[0];
+    let res;
+    try { res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl ? ctrl.signal : undefined }); }
+    catch (e) { throw new Error(host + ': ' + (e && e.name === 'AbortError' ? 'timed out' : 'unreachable')); }
+    if (!res.ok) throw new Error(host + ': HTTP ' + res.status);
+    let j; try { j = await res.json(); } catch (e) { throw new Error(host + ': bad reply'); }
+    if (!j || !Array.isArray(j.elements)) throw new Error(host + ': ' + (j && j.remark ? j.remark.slice(0, 80) : 'bad reply'));
+    return { host, elements: j.elements };
+  };
+  let win;
+  try { win = await promiseAny(OVERPASS.map(u => attempt(u[0], u[1]))); }
+  catch (errs) {
+    const why = (Array.isArray(errs) ? errs : [errs]).filter(e => e && e.message !== 'skipped').map(e => e.message).join('; ');
+    diag.osm = 'failed (' + why + ')';
+    throw new RouteError('network', 'OpenStreetMap is busy or unreachable right now. Try again in a minute, or pick Everything.');
+  } finally { done = true; clearTimeout(timer); if (ctrl) ctrl.abort(); }
+  const out = win.elements.map(e => ({ osm: e.type + '/' + e.id, lat: e.lat != null ? e.lat : (e.center && e.center.lat), lon: e.lon != null ? e.lon : (e.center && e.center.lon), tags: e.tags || {} })).filter(e => e.lat != null && e.tags.name);
+  diag.osm = out.length + ' from ' + win.host;
+  return out;
 }
 function osmDescribe(t) {
   const label = t.amenity === 'pub' ? 'Pub' : t.amenity === 'biergarten' ? 'Beer garden' : t.leisure === 'park' ? 'Park' : t.leisure === 'nature_reserve' ? 'Nature reserve' : t.leisure === 'garden' ? 'Garden' : t.tourism === 'viewpoint' ? 'Viewpoint' : t.natural === 'beach' ? 'Beach' : t.natural === 'peak' ? 'Hill' : 'Place';
@@ -864,7 +891,9 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
       c.score = scorePoi(c.views, !!c.thumb, rng);
       pois.push(c);
     }
-  }
+    diag.wiki = wikiRes.value.length + ' found, ' + pois.length + ' usable';
+  } else diag.wiki = 'failed (' + (wikiRes.reason && wikiRes.reason.message || 'error') + ')';
+  if (!usesOsm) diag.osm = 'not used';
   if (osmRes.status === 'fulfilled') {
     for (const o of osmRes.value) {
       if (haversine(start, o.p) < 30) continue;
@@ -1122,7 +1151,8 @@ function renderRoutingMode() {
   elS.orsToggle.disabled = !state.orsKey;
   elS.keyStatus.textContent = !state.orsKey ? '' : state.orsOn ? 'Key saved. Loops come from OpenRouteService; each loop uses 2 to 6 of your daily free requests.' : 'Key saved but switched off. Loops use standard routing.';
 }
-elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; requestAnimationFrame(setSheetHeight); });
+function renderDiag() { const d = $('diag'); d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
+elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; renderDiag(); requestAnimationFrame(setSheetHeight); });
 elS.btnSaveKey.addEventListener('click', () => {
   const k = elS.orsKey.value.trim();
   if (!k) { elS.keyStatus.textContent = 'Paste a key first.'; return; }
@@ -1207,6 +1237,7 @@ async function makeLoop(seed) {
   el.btnGo.disabled = true; el.btnShuffle.disabled = true;
   el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths…';
   el.btnShuffle.innerHTML = '<span class="spinner"></span> Shuffling';
+  const t0 = Date.now(); diag.wiki = diag.osm = ''; diag.error = '';
   try {
     const progress = (n, max, text) => { el.btnGo.innerHTML = '<span class="spinner"></span> ' + (text || 'Finding paths…') + ' ' + n + '/' + max; };
     const mode = routingMode(), start = state.start.p;
@@ -1244,8 +1275,13 @@ async function makeLoop(seed) {
     store.set('route', serializeRoute(route));
     if (!route.profile) loadElevation(route);
   } catch (e) {
+    diag.error = e && e.message || 'error';
     toast(e.message || 'Something went wrong making the loop.', 6000);
   } finally {
+    if (state.kind === 'tour') {
+      diag.last = 'Last ' + state.theme + ' search: Wikipedia ' + (diag.wiki || 'n/a') + ' · OSM ' + (diag.osm || 'n/a') + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s' + (diag.error ? ' · ' + diag.error : '');
+      store.set('diag', diag.last); renderDiag();
+    }
     state.busy = false;
     el.btnGo.innerHTML = label; el.btnGo.disabled = !state.start;
     el.btnShuffle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>Shuffle';
