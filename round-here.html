@@ -138,7 +138,8 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
 .seg button{flex:1;border:0;background:transparent;border-radius:10px;padding:9px 10px;font-weight:700;font-size:14px;cursor:pointer;color:var(--muted)}
 .seg button.on{background:var(--panel);color:var(--fg);box-shadow:0 1px 4px rgba(0,0,0,.15)}
 .themes{margin-top:-4px}
-.themes button{flex:1;text-align:center;padding:7px 8px}
+.themes button{flex:1;text-align:center;padding:7px 8px;white-space:nowrap}
+.themes button.locked{color:var(--muted);border-style:dashed}
 .stops{display:flex;flex-direction:column;gap:2px;max-height:168px;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;padding:4px}
 .stop-row{display:flex;align-items:center;gap:10px;border:0;background:transparent;text-align:left;padding:6px 8px;border-radius:9px;cursor:pointer;width:100%;color:inherit}
 .stop-row:active{background:var(--panel-2)}
@@ -258,8 +259,21 @@ a.btn{text-decoration:none}
         </div>
         <p id="keyStatus"></p>
         <p>If the quota runs out mid-day, the app drops back to standard routing for that loop on its own and tells you. Untick "Use OpenRouteService" to stay on standard routing without losing the key.</p>
+        <div class="eyebrow" id="placesHead" style="margin-top:6px">Pub and green tours</div>
+        <p>The Pubs and Green themes look places up through Geoapify, which serves OpenStreetMap's pubs, parks and viewpoints from a fast, reliable service. Free tier, no card: about 3,000 lookups a day; a tour uses a handful.</p>
+        <ol>
+          <li>Sign up free at <a href="https://myprojects.geoapify.com/" target="_blank" rel="noopener">myprojects.geoapify.com</a> and confirm the email.</li>
+          <li>Create a project; it comes with an API key. Copy it.</li>
+          <li>Paste it below. It stays on this phone only.</li>
+        </ol>
+        <input class="field" type="text" id="placesKey" placeholder="Paste your Geoapify key" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Geoapify key">
+        <div class="row">
+          <button class="btn primary" id="btnSavePlaces">Save</button>
+          <button class="btn secondary" id="btnClearPlaces">Remove key</button>
+        </div>
+        <p id="placesStatus"></p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v3.3</p>
+        <p class="tag" id="version">Round Here v3.4</p>
       </div>
     </div>
 
@@ -803,49 +817,16 @@ async function wikiCandidates(start, radius) {
   return all;
 }
 
-// ---------- OpenStreetMap (pubs, parks, viewpoints) ----------
-// Several public servers, staggered: the unlimited mirror first, the others join if it hasn't answered in a few seconds. First good answer wins.
-const OVERPASS = [['https://overpass.private.coffee/api/interpreter', 0], ['https://overpass-api.de/api/interpreter', 4000], ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 6000]];
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-function promiseAny(ps) {
-  return new Promise((resolve, reject) => {
-    let left = ps.length; const errs = [];
-    if (!left) return reject(errs);
-    ps.forEach((p, i) => Promise.resolve(p).then(resolve, e => { errs[i] = e; if (--left === 0) reject(errs); }));
-  });
-}
+// ---------- Places (Geoapify, for pubs and green spaces) ----------
+const GEOAPIFY = 'https://api.geoapify.com/v2/places';
+const PLACE_CATS = {
+  pubs: 'catering.pub,catering.biergarten',
+  green: 'leisure.park,leisure.park.garden,leisure.park.nature_reserve,natural.forest,natural.water.inland,natural.mountain.peak,natural.mountain.hill,natural.heath_moor,natural.protected_area,beach,tourism.attraction.viewpoint,national_park'
+};
+const THEME_NEEDS_KEY = { pubs: true, green: true };
 const diag = { last: '' };
-async function osmAround(start, radius, selectors) {
-  const around = '(around:' + Math.round(radius) + ',' + start[0].toFixed(5) + ',' + start[1].toFixed(5) + ')';
-  const q = '[out:json][timeout:15];(' + selectors.map(s => 'nwr' + s + '["name"]' + around + ';').join('') + ');out center 200;';
-  const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
-  const timer = setTimeout(() => { if (ctrl) ctrl.abort(); }, 16000);
-  let done = false;
-  const attempt = async (url, delay) => {
-    if (delay) await sleep(delay);
-    if (done) throw new Error('skipped');
-    const host = url.replace(/^https:\/\//, '').split('/')[0];
-    let res;
-    try { res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl ? ctrl.signal : undefined }); }
-    catch (e) { throw new Error(host + ': ' + (e && e.name === 'AbortError' ? 'timed out' : 'unreachable')); }
-    if (!res.ok) throw new Error(host + ': HTTP ' + res.status);
-    let j; try { j = await res.json(); } catch (e) { throw new Error(host + ': bad reply'); }
-    if (!j || !Array.isArray(j.elements)) throw new Error(host + ': ' + (j && j.remark ? j.remark.slice(0, 80) : 'bad reply'));
-    return { host, elements: j.elements };
-  };
-  let win;
-  try { win = await promiseAny(OVERPASS.map(u => attempt(u[0], u[1]))); }
-  catch (errs) {
-    const why = (Array.isArray(errs) ? errs : [errs]).filter(e => e && e.message !== 'skipped').map(e => e.message).join('; ');
-    diag.osm = 'failed (' + why + ')';
-    throw new RouteError('network', 'OpenStreetMap is busy or unreachable right now. Try again in a minute, or pick Everything.');
-  } finally { done = true; clearTimeout(timer); if (ctrl) ctrl.abort(); }
-  const out = win.elements.map(e => ({ osm: e.type + '/' + e.id, lat: e.lat != null ? e.lat : (e.center && e.center.lat), lon: e.lon != null ? e.lon : (e.center && e.center.lon), tags: e.tags || {} })).filter(e => e.lat != null && e.tags.name);
-  diag.osm = out.length + ' from ' + win.host;
-  return out;
-}
 function osmDescribe(t) {
-  const label = t.amenity === 'pub' ? 'Pub' : t.amenity === 'biergarten' ? 'Beer garden' : t.leisure === 'park' ? 'Park' : t.leisure === 'nature_reserve' ? 'Nature reserve' : t.leisure === 'garden' ? 'Garden' : t.tourism === 'viewpoint' ? 'Viewpoint' : t.natural === 'beach' ? 'Beach' : t.natural === 'peak' ? 'Hill' : 'Place';
+  const label = t.amenity === 'pub' ? 'Pub' : t.amenity === 'biergarten' ? 'Beer garden' : t.leisure === 'park' ? 'Park' : t.leisure === 'nature_reserve' ? 'Nature reserve' : t.leisure === 'garden' ? 'Garden' : t.tourism === 'viewpoint' ? 'Viewpoint' : t.natural === 'beach' ? 'Beach' : t.natural === 'peak' ? 'Hill' : t.natural === 'wood' || t.landuse === 'forest' ? 'Woodland' : t.natural === 'water' ? 'Lake' : t.natural === 'heath' ? 'Heath' : t.boundary === 'national_park' ? 'National park' : t.boundary === 'protected_area' ? 'Protected area' : 'Place';
   const bits = [];
   if (t.description) bits.push(t.description.replace(/\s+/g, ' ').trim().replace(/\.?$/, '.'));
   if (t['addr:street']) bits.push('On ' + t['addr:street'] + '.');
@@ -857,30 +838,52 @@ function osmDescribe(t) {
   if (t.start_date) bits.push('Dates from ' + t.start_date + '.');
   if (t.ele && t.natural === 'peak' && !isNaN(+t.ele)) bits.push(Math.round(+t.ele) + ' m above sea level.');
   if (t.opening_hours) bits.push('Opening hours: ' + t.opening_hours + '.');
-  if (t.operator && t.leisure) bits.push('Looked after by ' + t.operator + '.');
+  if (t.operator && (t.leisure || t.boundary)) bits.push('Looked after by ' + t.operator + '.');
   return { label: label + (t.brewery ? ' · ' + t.brewery : ''), text: bits.join(' ') };
 }
-async function osmCandidates(start, radius, theme, rng) {
-  const sel = theme === 'pubs' ? ['["amenity"~"^(pub|biergarten)$"]'] : ['["leisure"~"^(park|nature_reserve|garden)$"]', '["tourism"="viewpoint"]', '["natural"~"^(beach|peak)$"]'];
-  const els = await osmAround(start, radius, sel);
-  return els.map(e => {
-    const t = e.tags, d = osmDescribe(t);
+async function placesCandidates(start, radius, theme, key, rng) {
+  const q = new URLSearchParams({ categories: PLACE_CATS[theme], filter: 'circle:' + start[1].toFixed(6) + ',' + start[0].toFixed(6) + ',' + Math.round(radius), bias: 'proximity:' + start[1].toFixed(6) + ',' + start[0].toFixed(6), limit: '120', apiKey: key });
+  let res;
+  try { res = await fetch(GEOAPIFY + '?' + q.toString(), { signal: timeoutSignal(15000) }); }
+  catch (e) { diag.places = 'failed (unreachable)'; throw new RouteError('network', 'Could not reach the places service. Check your signal and try again.'); }
+  let j = null; try { j = await res.json(); } catch (e) {}
+  if (res.status === 401 || res.status === 403) { diag.places = 'failed (key rejected)'; throw new RouteError('places', 'The places key was rejected. Check it in Settings.'); }
+  if (res.status === 429) { diag.places = 'failed (quota)'; throw new RouteError('places', 'The places key has used its free quota for today.'); }
+  if (!res.ok || !j || !Array.isArray(j.features)) { diag.places = 'failed (HTTP ' + res.status + ')'; throw new RouteError('places', 'Places lookup failed' + (j && j.message ? ': ' + j.message : ' (' + res.status + ')') + '.'); }
+  const out = [];
+  for (const f of j.features) {
+    const p = f.properties || {}; if (!p.name || p.lat == null || p.lon == null) continue;
+    const t = Object.assign({}, (p.datasource && p.datasource.raw) || {});
+    if (!t.amenity && !t.leisure && !t.natural && !t.tourism && !t.boundary && !t.landuse) {
+      const cats = p.categories || [];
+      if (cats.some(c => c.startsWith('catering.pub'))) t.amenity = 'pub'; else if (cats.some(c => c.startsWith('catering.biergarten'))) t.amenity = 'biergarten';
+      else if (cats.some(c => c.startsWith('leisure.park.garden'))) t.leisure = 'garden'; else if (cats.some(c => c.startsWith('leisure.park.nature_reserve'))) t.leisure = 'nature_reserve'; else if (cats.some(c => c.startsWith('leisure.park'))) t.leisure = 'park';
+      else if (cats.some(c => c.includes('viewpoint'))) t.tourism = 'viewpoint'; else if (cats.some(c => c.startsWith('beach'))) t.natural = 'beach'; else if (cats.some(c => c.includes('mountain'))) t.natural = 'peak'; else if (cats.some(c => c.startsWith('natural.forest'))) t.natural = 'wood'; else if (cats.some(c => c.startsWith('natural.water'))) t.natural = 'water'; else if (cats.some(c => c.startsWith('national_park'))) t.boundary = 'national_park';
+    }
+    if (p.opening_hours && !t.opening_hours) t.opening_hours = p.opening_hours;
+    const d = osmDescribe(t);
     let wiki = t.wikipedia || null; if (wiki && wiki.indexOf(':') < 0) wiki = 'en:' + wiki;
-    const base = 1 + (wiki || t.wikidata ? 1.5 : 0) + (t.historic || t.heritage ? 0.6 : 0) + (t.real_ale === 'yes' ? 0.2 : 0) + (t.description ? 0.2 : 0);
-    return { id: 'osm:' + e.osm, kind: 'osm', lang: null, pageid: null, title: t.name, p: [e.lat, e.lon], desc: d.label, descEn: d.label, views: 0, thumb: null, wiki, osmText: d.text, url: wiki ? wikiTitleUrl(wiki) : 'https://www.openstreetmap.org/' + e.osm, link: wiki ? 'Wikipedia' : 'OpenStreetMap', score: base * (0.6 + 0.8 * rng()) };
-  });
+    const osmType = { n: 'node', w: 'way', r: 'relation' }[t.osm_type] || t.osm_type;
+    const osmRef = t.osm_id && osmType ? osmType + '/' + t.osm_id : null;
+    const base = 1 + (wiki || t.wikidata ? 1.5 : 0) + (t.historic || t.heritage ? 0.6 : 0) + (t.real_ale === 'yes' ? 0.2 : 0) + (t.description ? 0.2 : 0) + (p.website ? 0.1 : 0);
+    out.push({ id: osmRef ? 'osm:' + osmRef : 'gp:' + (p.place_id || '').slice(0, 24), kind: 'osm', lang: null, pageid: null, title: p.name, p: [p.lat, p.lon], desc: d.label, descEn: d.label, views: 0, thumb: null, wiki, osmText: d.text, url: wiki ? wikiTitleUrl(wiki) : osmRef ? 'https://www.openstreetmap.org/' + osmRef : (p.website || '#'), link: wiki ? 'Wikipedia' : osmRef ? 'OpenStreetMap' : 'Website', score: base * (0.6 + 0.8 * rng()) });
+  }
+  diag.places = out.length + ' from Geoapify';
+  return out;
 }
 
 const THEME_LABEL = { all: '', history: 'history', pubs: 'pub', green: 'green' };
 // Pick the best-read places within reach (by theme), thread a loop through them, fit the length.
-async function generateTour(start, targetM, seed, router, onProgress, theme) {
+async function generateTour(start, targetM, seed, router, onProgress, theme, placesKey) {
   theme = theme || 'all';
+  if (THEME_NEEDS_KEY[theme] && !placesKey) theme = 'all';
   const rng = mulberry32(seed);
   onProgress && onProgress(1, 5, 'Finding ' + (theme === 'pubs' ? 'pubs…' : theme === 'green' ? 'green spaces…' : 'landmarks…'));
   const radius = Math.min(10000, Math.max(700, targetM * 0.4));
   const noPoi = () => new RouteError('nopoi', theme === 'pubs' ? 'No pubs within reach here, so this is a plain loop.' : theme === 'green' ? 'No parks or viewpoints within reach here, so this is a plain loop.' : theme === 'history' ? 'No historic places within reach here, so this is a plain loop.' : 'No landmarks within reach here, so this is a plain loop.');
-  const usesOsm = theme === 'pubs' || theme === 'green';
-  const [wikiRes, osmRes] = await Promise.allSettled([wikiCandidates(start, radius), usesOsm ? osmCandidates(start, radius, theme, rng) : Promise.resolve([])]);
+  const usesOsm = !!THEME_NEEDS_KEY[theme];
+  const [wikiRes, osmRes] = await Promise.allSettled([wikiCandidates(start, radius), usesOsm ? placesCandidates(start, radius, theme, placesKey, rng) : Promise.resolve([])]);
+  if (usesOsm && osmRes.status === 'rejected' && osmRes.reason && osmRes.reason.kind === 'places') throw osmRes.reason;
   if (wikiRes.status === 'rejected' && (!usesOsm || osmRes.status === 'rejected')) throw wikiRes.reason;
   let pois = [];
   if (wikiRes.status === 'fulfilled') {
@@ -893,7 +896,7 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
     }
     diag.wiki = wikiRes.value.length + ' found, ' + pois.length + ' usable';
   } else diag.wiki = 'failed (' + (wikiRes.reason && wikiRes.reason.message || 'error') + ')';
-  if (!usesOsm) diag.osm = 'not used';
+  if (!usesOsm) diag.places = 'not used';
   if (osmRes.status === 'fulfilled') {
     for (const o of osmRes.value) {
       if (haversine(start, o.p) < 30) continue;
@@ -1114,43 +1117,78 @@ const state = {
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
   orsKey: String(store.get('orsKey', '') || '').trim(), green: store.get('green', true) !== false, orsOn: store.get('orsOn', true) !== false,
   kind: store.get('kind', 'loop') === 'tour' ? 'tour' : 'loop',
-  theme: ['all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all'
+  theme: ['all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all',
+  placesKey: String(store.get('placesKey', '') || '').trim()
 };
+if (THEME_NEEDS_KEY[state.theme] && !state.placesKey) state.theme = 'all';
 
 // ---------- Walk kind + theme ----------
 const elK = { loop: $('kindLoop'), tour: $('kindTour'), themes: $('themes') };
+const LOCK_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-1px;margin-left:4px" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 function renderKind() {
   const t = state.kind === 'tour';
   elK.loop.classList.toggle('on', !t); elK.tour.classList.toggle('on', t);
   elK.loop.setAttribute('aria-selected', String(!t)); elK.tour.setAttribute('aria-selected', String(t));
   elK.themes.hidden = !t;
-  elK.themes.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === state.theme));
+  elK.themes.querySelectorAll('button').forEach(b => {
+    const locked = !!THEME_NEEDS_KEY[b.dataset.theme] && !state.placesKey;
+    b.classList.toggle('on', b.dataset.theme === state.theme);
+    b.classList.toggle('locked', locked);
+    b.innerHTML = b.dataset.label + (locked ? LOCK_SVG : '');
+    b.setAttribute('aria-label', b.dataset.label + (locked ? ' (needs a places key)' : ''));
+  });
   el.btnGo.textContent = t ? 'Make me a tour' : 'Make me a loop';
   renderPlanHint();
   requestAnimationFrame(setSheetHeight);
 }
-elK.themes.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.theme = b.dataset.theme; store.set('theme', state.theme); renderKind(); });
+elK.themes.querySelectorAll('button').forEach(b => { b.dataset.label = b.textContent.trim(); });
+elK.themes.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (THEME_NEEDS_KEY[b.dataset.theme] && !state.placesKey) {
+    elS.settings.hidden = false; renderDiag(); requestAnimationFrame(() => { setSheetHeight(); $('placesHead').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+    toast((b.dataset.theme === 'pubs' ? 'Pub' : 'Green') + ' tours need a free Geoapify key. Paste it under Settings.', 5000);
+    return;
+  }
+  state.theme = b.dataset.theme; store.set('theme', state.theme); renderKind();
+});
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
   const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
   const tour = { all: ' Tours go past the most-read places nearby, so they work best in towns and cities.', history: ' Routes past churches, castles, monuments and old buildings nearby.', pubs: ' Routes past pubs nearby. Pace yourself.', green: ' Routes through parks, gardens and viewpoints nearby.' };
+  if (state.kind === 'tour' && !state.placesKey) tour.all += ' Pubs and Green need a free places key (see Settings).';
   el.planHint.textContent = state.kind === 'tour' ? base + tour[state.theme] : base;
 }
 elK.loop.addEventListener('click', () => { state.kind = 'loop'; store.set('kind', 'loop'); renderKind(); });
 elK.tour.addEventListener('click', () => { state.kind = 'tour'; store.set('kind', 'tour'); renderKind(); });
 
 // ---------- Routing settings ----------
-const elS = { btnSettings: $('btnSettings'), settings: $('settings'), orsKey: $('orsKey'), greenToggle: $('greenToggle'), orsToggle: $('orsToggle'), btnSaveKey: $('btnSaveKey'), btnClearKey: $('btnClearKey'), keyStatus: $('keyStatus'), modeTag: $('modeTag'), modeText: $('modeText') };
+const elS = { btnSettings: $('btnSettings'), settings: $('settings'), orsKey: $('orsKey'), greenToggle: $('greenToggle'), orsToggle: $('orsToggle'), btnSaveKey: $('btnSaveKey'), btnClearKey: $('btnClearKey'), keyStatus: $('keyStatus'), modeTag: $('modeTag'), modeText: $('modeText'),
+  placesKey: $('placesKey'), btnSavePlaces: $('btnSavePlaces'), btnClearPlaces: $('btnClearPlaces'), placesStatus: $('placesStatus') };
 function routingMode() { return state.orsKey && state.orsOn ? (state.green ? 'green' : 'ors') : 'osrm'; }
 function renderRoutingMode() {
   const m = routingMode();
   elS.modeTag.className = 'tag' + (m === 'green' ? ' green' : '');
   elS.modeText.textContent = m === 'green' ? 'Green routing' : m === 'ors' ? 'Trail routing (OpenRouteService)' : 'Standard routing';
-  elS.btnSettings.textContent = state.orsKey ? 'Routing settings' : 'Greener routes';
+  elS.btnSettings.textContent = state.orsKey || state.placesKey ? 'Settings' : 'Greener routes & more';
   elS.orsKey.value = state.orsKey; elS.greenToggle.checked = state.green; elS.orsToggle.checked = state.orsOn;
   elS.orsToggle.disabled = !state.orsKey;
   elS.keyStatus.textContent = !state.orsKey ? '' : state.orsOn ? 'Key saved. Loops come from OpenRouteService; each loop uses 2 to 6 of your daily free requests.' : 'Key saved but switched off. Loops use standard routing.';
+  elS.placesKey.value = state.placesKey;
+  elS.placesStatus.textContent = state.placesKey ? 'Key saved. Pub and Green tours are unlocked.' : '';
 }
+elS.btnSavePlaces.addEventListener('click', () => {
+  const k = elS.placesKey.value.trim();
+  if (!k) { elS.placesStatus.textContent = 'Paste a key first.'; return; }
+  state.placesKey = k; store.set('placesKey', k);
+  renderRoutingMode(); renderKind(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
+  toast('Pub and Green tours unlocked');
+});
+elS.btnClearPlaces.addEventListener('click', () => {
+  state.placesKey = ''; store.del('placesKey');
+  if (THEME_NEEDS_KEY[state.theme]) { state.theme = 'all'; store.set('theme', 'all'); }
+  renderRoutingMode(); renderKind(); elS.settings.hidden = true; requestAnimationFrame(setSheetHeight);
+  toast('Places key removed');
+});
 function renderDiag() { const d = $('diag'); d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
 elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; renderDiag(); requestAnimationFrame(setSheetHeight); });
 elS.btnSaveKey.addEventListener('click', () => {
@@ -1237,14 +1275,18 @@ async function makeLoop(seed) {
   el.btnGo.disabled = true; el.btnShuffle.disabled = true;
   el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths…';
   el.btnShuffle.innerHTML = '<span class="spinner"></span> Shuffling';
-  const t0 = Date.now(); diag.wiki = diag.osm = ''; diag.error = '';
+  const t0 = Date.now(); diag.wiki = diag.places = ''; diag.error = '';
   try {
     const progress = (n, max, text) => { el.btnGo.innerHTML = '<span class="spinner"></span> ' + (text || 'Finding paths…') + ' ' + n + '/' + max; };
     const mode = routingMode(), start = state.start.p;
     const routeWith = async router => {
       if (state.kind === 'tour') {
-        try { const r = await generateTour(start, targetM, seed, router, progress, state.theme); r.kind = 'tour'; return r; }
-        catch (e) { if (e.kind !== 'nopoi') throw e; toast(e.message, 6000); }
+        try { const r = await generateTour(start, targetM, seed, router, progress, state.theme, state.placesKey); r.kind = 'tour'; return r; }
+        catch (e) {
+          if (e.kind === 'nopoi') toast(e.message, 6000);
+          else if (e.kind === 'places') toast(e.message + ' Making a plain loop instead.', 7000);
+          else throw e;
+        }
       }
       const r = await generateLoop(start, targetM, seed, progress, router); r.kind = 'loop'; return r;
     };
@@ -1279,7 +1321,7 @@ async function makeLoop(seed) {
     toast(e.message || 'Something went wrong making the loop.', 6000);
   } finally {
     if (state.kind === 'tour') {
-      diag.last = 'Last ' + state.theme + ' search: Wikipedia ' + (diag.wiki || 'n/a') + ' · OSM ' + (diag.osm || 'n/a') + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s' + (diag.error ? ' · ' + diag.error : '');
+      diag.last = 'Last ' + state.theme + ' search: Wikipedia ' + (diag.wiki || 'n/a') + ' · Places ' + (diag.places || 'n/a') + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s' + (diag.error ? ' · ' + diag.error : '');
       store.set('diag', diag.last); renderDiag();
     }
     state.busy = false;
