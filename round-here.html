@@ -269,7 +269,7 @@ a.btn{text-decoration:none}
         </div>
         <p id="placesStatus"></p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v3.6</p>
+        <p class="tag" id="version">Round Here v3.8</p>
       </div>
     </div>
 
@@ -323,9 +323,8 @@ a.btn{text-decoration:none}
     <div class="card-body">
       <img id="cardImg" alt="" hidden>
       <p id="cardText"></p>
-      <div class="row">
-        <button class="btn secondary" id="btnSpeak">Read aloud</button>
-        <a class="btn secondary" id="cardLink" href="#" target="_blank" rel="noopener">Wikipedia</a>
+      <div class="row" id="linkRow">
+        <a class="btn secondary" id="cardLink" href="#" target="_blank" rel="noopener">Read more on Wikipedia</a>
       </div>
       <div class="row">
         <button class="btn secondary" id="btnPrevStop">‹ Previous</button>
@@ -336,7 +335,7 @@ a.btn{text-decoration:none}
           <svg viewBox="0 0 24 24"><path d="M5 5l14 14"/><path d="M19 5L5 19"/></svg>Skip this stop
         </button>
       </div>
-      <p class="hint">Text and photo from Wikipedia (CC BY-SA).</p>
+      <p class="hint" id="cardCredit">Text and photo from Wikipedia (CC BY-SA).</p>
     </div>
   </div>
 </div>
@@ -1571,40 +1570,28 @@ async function exportGpx() {
 el.btnGpx.addEventListener('click', exportGpx);
 
 // ---------- Stop cards ----------
-const elC = { card: $('stopCard'), num: $('cardNum'), title: $('cardTitle'), desc: $('cardDesc'), close: $('cardClose'), img: $('cardImg'), text: $('cardText'), speak: $('btnSpeak'), link: $('cardLink'), prev: $('btnPrevStop'), next: $('btnNextStop'), skip: $('btnSkipStop'), skipRow: $('skipRow') };
+const elC = { card: $('stopCard'), num: $('cardNum'), title: $('cardTitle'), desc: $('cardDesc'), close: $('cardClose'), img: $('cardImg'), text: $('cardText'), link: $('cardLink'), linkRow: $('linkRow'), prev: $('btnPrevStop'), next: $('btnNextStop'), skip: $('btnSkipStop'), skipRow: $('skipRow') };
 let cardIdx = -1;
 function openCard(i) {
   const r = state.route; if (!r || !r.stops || !r.stops[i]) return;
   const s = r.stops[i]; cardIdx = i;
-  stopSpeaking();
   elC.num.textContent = i + 1; elC.title.textContent = s.title; elC.desc.textContent = s.desc || '';
   if (s.thumb) { elC.img.src = s.thumb; elC.img.hidden = false; } else { elC.img.hidden = true; elC.img.removeAttribute('src'); }
-  elC.text.textContent = s.extract || s.osmText || (s.extract === null ? 'Loading the summary…' : 'No summary available for this one.');
-  elC.link.href = s.url; elC.link.textContent = s.link || 'Wikipedia'; elC.link.hidden = !s.url || s.url === '#';
+  elC.text.textContent = s.extract || s.osmText || (s.extract === null ? 'Loading the summary…' : '');
+  elC.text.hidden = !elC.text.textContent;
+  // Only a Wikipedia link earns a button; map-database links were clutter.
+  const wikiLink = s.url && s.url !== '#' && /wikipedia\.org/.test(s.url);
+  elC.link.href = wikiLink ? s.url : '#'; elC.linkRow.hidden = !wikiLink;
+  $('cardCredit').textContent = s.pageid || s.wiki ? 'Text and photo from Wikipedia (CC BY-SA).' : 'Details from OpenStreetMap contributors (ODbL).';
   elC.prev.disabled = i === 0; elC.next.disabled = i === r.stops.length - 1;
   elC.skipRow.hidden = !(state.mode === 'route' && r.pool && r.targetM && !r.shared);
   elC.card.hidden = false; elC.card.scrollTop = 0;
 }
 elC.skip.addEventListener('click', () => { if (cardIdx >= 0) skipStop(cardIdx); });
-function closeCard() { elC.card.hidden = true; cardIdx = -1; stopSpeaking(); }
+function closeCard() { elC.card.hidden = true; cardIdx = -1; }
 elC.close.addEventListener('click', closeCard);
 elC.prev.addEventListener('click', () => { if (cardIdx > 0) openCard(cardIdx - 1); });
 elC.next.addEventListener('click', () => { if (state.route && cardIdx < state.route.stops.length - 1) openCard(cardIdx + 1); });
-
-function stopSpeaking() { try { if ('speechSynthesis' in window) speechSynthesis.cancel(); } catch (e) {} elC.speak.textContent = 'Read aloud'; }
-elC.speak.addEventListener('click', () => {
-  if (!('speechSynthesis' in window)) { toast('This browser has no voice to read with.'); return; }
-  if (speechSynthesis.speaking) { stopSpeaking(); return; }
-  const s = state.route && state.route.stops[cardIdx]; if (!s) return;
-  const text = s.title + '. ' + (s.desc ? s.desc + '. ' : '') + (s.extract || '');
-  try {
-    const u = new SpeechSynthesisUtterance(text); u.lang = 'en-GB'; u.rate = 1;
-    const voices = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
-    const v = voices.find(v => v.lang === 'en-GB') || voices.find(v => /^en/.test(v.lang)); if (v) u.voice = v;
-    u.onend = u.onerror = () => { elC.speak.textContent = 'Read aloud'; };
-    speechSynthesis.speak(u); elC.speak.textContent = 'Stop reading';
-  } catch (e) { toast('Could not start the voice.'); }
-});
 el.nextStop.addEventListener('click', () => { const r = state.route; if (!r || !r.stops) return; const i = r.stops.findIndex(s => !s.visited); openCard(i >= 0 ? i : r.stops.length - 1); });
 
 function checkStops(p) {
