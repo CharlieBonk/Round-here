@@ -243,7 +243,7 @@ a.btn{text-decoration:none}
         <p>Loops use a hiking profile that leans towards parks, woods and quiet streets rather than the shortest line. Tours pick their stops from Wikipedia and OpenStreetMap. Nothing to sign up for.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v4.3</p>
+        <p class="tag" id="version">Round Here v4.4</p>
       </div>
     </div>
 
@@ -943,8 +943,8 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
 // Route a sequence of stops (and fillers) from the start and back, trimming or stretching until the length fits. Null if nothing routes.
 async function fitTour(start, seq, targetM, router, onProgress, seed) {
   let best = null;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    onProgress && onProgress(2 + attempt, 5, 'Routing the tour…');
+  for (let attempt = 0; attempt < 5; attempt++) {
+    onProgress && onProgress(2 + attempt, 6, 'Routing the tour…');
     const wps = [start].concat(seq.map(e => e.p), [start]);
     let res;
     try { res = await router(wps); }
@@ -959,7 +959,7 @@ async function fitTour(start, seq, targetM, router, onProgress, seed) {
     const spurs = findSpurs(res.coords), awkward = new Set(), snip = [];
     for (const sp of spurs) {
       const k = sp.len > 150 ? seq.findIndex(e => e.poi && haversine(e.p, sp.tip) < 80) : -1;
-      if (k >= 0 && attempt < 3 && seq.filter(e => e.poi).length > 1) awkward.add(k); else snip.push(sp);
+      if (k >= 0 && attempt < 4 && seq.filter(e => e.poi).length > 1) awkward.add(k); else snip.push(sp);
     }
     if (awkward.size) { seq = seq.filter((_, k) => !awkward.has(k)); continue; }
     const snipped = removeSpurs(res.coords, res.eles || null, snip); res.coords = snipped.coords; res.eles = snipped.eles;
@@ -967,8 +967,8 @@ async function fitTour(start, seq, targetM, router, onProgress, seed) {
     const err = Math.abs(total - targetM) / targetM;
     const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap: overlapFraction(resample(res.coords, cum, 25).pts), score: err, seed, seq: seq.slice() };
     if (!best || err < best.err) best = cand;
-    if (err < 0.12) break;
-    if (total > targetM * 1.12) {
+    if (err < 0.08) break;
+    if (total > targetM * 1.08) {
       if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi)) break;
       seq = dropWeakest(seq, start);
     } else {
@@ -1037,12 +1037,12 @@ async function generateLoop(start, targetM, seed, onProgress, router) {
   const rng = mulberry32(seed);
   let bearingDeg = rng() * 360, clockwise = rng() < 0.5;
   const K = targetM <= 5000 ? 4 : targetM <= 12000 ? 5 : 6;
-  const MAX_CALLS = 6;
+  const MAX_CALLS = 7;
   let calls = 0, best = null;
   for (let pass = 0; pass < 2 && calls < MAX_CALLS; pass++) {
     const jitter = Array.from({ length: K }, () => ({ r: 0.85 + 0.3 * rng(), a: (rng() - 0.5) * 24 }));
     let r = targetM / (2 * Math.PI) * 0.8;
-    for (let attempt = 0; attempt < 4 && calls < MAX_CALLS; attempt++) {
+    for (let attempt = 0; attempt < 5 && calls < MAX_CALLS; attempt++) {
       calls++; onProgress && onProgress(calls, MAX_CALLS);
       const wps = planWaypoints(start, r, bearingDeg, clockwise, K, jitter);
       let res;
@@ -1056,7 +1056,7 @@ async function generateLoop(start, targetM, seed, onProgress, router) {
       const score = err + 0.6 * Math.max(0, overlap - 0.08);
       const cand = { coords: res.coords, eles: res.eles || null, cum, total, overlap, err, score, seed };
       if (!best || score < best.score) best = cand;
-      if (err < 0.06) break;
+      if (err < 0.05) break;
       r = Math.min(25000, Math.max(150, r * Math.pow(targetM / total, 0.9)));
     }
     if (best && best.overlap < 0.3 && best.err < 0.15) break;
