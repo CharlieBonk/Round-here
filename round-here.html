@@ -243,7 +243,7 @@ a.btn{text-decoration:none}
         <p>Loops use a hiking profile that leans towards parks, woods and quiet streets rather than the shortest line. Tours pick their stops from Wikipedia and OpenStreetMap. Nothing to sign up for.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v4.2</p>
+        <p class="tag" id="version">Round Here v4.3</p>
       </div>
     </div>
 
@@ -523,6 +523,29 @@ function decodePolyline(str) {
   }
   return out;
 }
+// ---- Out-and-back spurs ----
+// A spur is a stretch the route walks and then walks straight back along. Returns [{t, m, len, tip, base}], t = tip index, indices t-m..t+m.
+function findSpurs(coords, tol) {
+  tol = tol || 6; const n = coords.length, out = [];
+  for (let t = 1; t < n - 1; t++) {
+    if (haversine(coords[t - 1], coords[t + 1]) > tol) continue;
+    let m = 1;
+    while (t - 1 - m >= 0 && t + 1 + m < n && haversine(coords[t - 1 - m], coords[t + 1 + m]) <= tol) m++;
+    let len = 0; for (let i = t - m; i < t; i++) len += haversine(coords[i], coords[i + 1]);
+    if (len > 8) out.push({ t, m, len, tip: coords[t], base: coords[t - m] });
+    t = t + m;
+  }
+  return out;
+}
+// Cut the given spurs out (keeping the base point). eles, if given, is trimmed in step.
+function removeSpurs(coords, eles, spurs) {
+  if (!spurs.length) return { coords, eles };
+  const drop = new Uint8Array(coords.length);
+  for (const sp of spurs) for (let i = sp.t - sp.m + 1; i <= sp.t + sp.m && i < coords.length; i++) drop[i] = 1;
+  const c2 = [], e2 = eles ? [] : null;
+  for (let i = 0; i < coords.length; i++) { if (drop[i]) continue; c2.push(coords[i]); if (e2) e2.push(eles[i]); }
+  return { coords: c2, eles: e2 };
+}
 // Share payload: a compact array form of the route and its stops.
 function packRoute(r) {
   return { v: 1, k: r.kind || 'loop', th: r.theme || null, c: encodePolyline(simplify(r.coords, 4)), s: (r.stops || []).map(s => [Math.round(s.lat * 1e5), Math.round(s.lon * 1e5), s.title, s.desc || '', s.id || '', s.wiki || '']) };
@@ -621,9 +644,10 @@ const ROUTER = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/';
 class RouteError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
 function timeoutSignal(ms) { try { return AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined; } catch (e) { return undefined; } }
 
-async function osrmRoute(points) {
+// "Continue straight" forbids turning round at a waypoint, so the route carries on round the block instead of retracing. A stop at a true dead end can't be routed that way, so retry without.
+async function osrmRoute(points, allowUturns) {
   const coordStr = points.map(p => p[1].toFixed(6) + ',' + p[0].toFixed(6)).join(';');
-  const url = ROUTER + coordStr + '?overview=full&geometries=geojson&steps=false&alternatives=false';
+  const url = ROUTER + coordStr + '?overview=full&geometries=geojson&steps=false&alternatives=false' + (allowUturns ? '' : '&continue_straight=true');
   let res;
   try { res = await fetch(url, { signal: timeoutSignal(20000) }); }
   catch (e) { throw new RouteError('network', 'Could not reach the routing service. Check your signal and try again.'); }
@@ -631,7 +655,10 @@ async function osrmRoute(points) {
   if (!res.ok) throw new RouteError('http', 'Routing service error (' + res.status + ').');
   let j;
   try { j = await res.json(); } catch (e) { throw new RouteError('http', 'The routing service sent an unreadable reply. Try again.'); }
-  if (j.code !== 'Ok' || !j.routes || !j.routes[0]) { const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(j.message || ''); if (m) e.badIndex = +m[1]; throw e; }
+  if (j.code !== 'Ok' || !j.routes || !j.routes[0]) {
+    if (!allowUturns && points.length > 2) return osrmRoute(points, true);
+    const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(j.message || ''); if (m) e.badIndex = +m[1]; throw e;
+  }
   const r = j.routes[0];
   return { coords: r.geometry.coordinates.map(c => [c[1], c[0]]), distance: r.distance };
 }
@@ -670,14 +697,15 @@ function proxyError(res, j) {
 }
 
 // OpenRouteService (via the proxy): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
-let orsProfile = 'foot-hiking', orsGreenRejected = false;
-async function orsRoute(points, green) {
+let orsProfile = 'foot-hiking', orsGreenRejected = false, orsStraightRejected = false;
+async function orsRoute(points, green, allowUturns) {
   if (orsGreenRejected) green = false;
   const body = {
     coordinates: points.map(p => [+p[1].toFixed(6), +p[0].toFixed(6)]),
     preference: 'recommended', elevation: true, instructions: false,
     radiuses: points.map(() => -1)
   };
+  if (!allowUturns && !orsStraightRejected && points.length > 2) body.continue_straight = true;
   if (green) body.options = { profile_params: { weightings: { green: 1, quiet: 0.6 } } };
   let res;
   try {
@@ -688,11 +716,15 @@ async function orsRoute(points, green) {
   const detail = 'HTTP ' + res.status + (j && (j.message || (j.error && j.error.message)) ? ': ' + String(j.message || j.error.message).slice(0, 120) : '');
   if (res.status === 401 || res.status === 403) throw Object.assign(new RouteError('key', 'The routing service is unavailable right now.'), { detail });
   if (res.status === 429) throw Object.assign(new RouteError('key', 'The routing service is busy right now.'), { detail });
-  if (res.status === 404 && orsProfile === 'foot-hiking' && !(j && j.error && j.error.code)) { orsProfile = 'foot-walking'; return orsRoute(points, green); }
+  if (res.status === 404 && orsProfile === 'foot-hiking' && !(j && j.error && j.error.code)) { orsProfile = 'foot-walking'; return orsRoute(points, green, allowUturns); }
   if (!res.ok || !j) {
     const code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || (j && j.message) || '';
-    if (code === 2009 || code === 2010) { const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(msg); if (m) e.badIndex = +m[1]; throw e; }
-    if (green && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false); }
+    if (code === 2009 || code === 2010) {
+      if (body.continue_straight && code === 2009) return orsRoute(points, green, true);
+      const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(msg); if (m) e.badIndex = +m[1]; throw e;
+    }
+    if (body.continue_straight && /continue_straight/i.test(msg)) { orsStraightRejected = true; return orsRoute(points, green, true); }
+    if (green && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false, allowUturns); }
     if (res.status >= 500) throw Object.assign(new RouteError('key', 'The routing service is having trouble right now.'), { detail });
     throw new RouteError('http', 'Routing error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
   }
@@ -924,9 +956,16 @@ async function fitTour(start, seq, targetM, router, onProgress, seed) {
       seq = (bi != null && bi >= 1 && bi <= seq.length) ? seq.filter((_, k) => k !== bi - 1) : dropWeakest(seq, start);
       continue;
     }
+    const spurs = findSpurs(res.coords), awkward = new Set(), snip = [];
+    for (const sp of spurs) {
+      const k = sp.len > 150 ? seq.findIndex(e => e.poi && haversine(e.p, sp.tip) < 80) : -1;
+      if (k >= 0 && attempt < 3 && seq.filter(e => e.poi).length > 1) awkward.add(k); else snip.push(sp);
+    }
+    if (awkward.size) { seq = seq.filter((_, k) => !awkward.has(k)); continue; }
+    const snipped = removeSpurs(res.coords, res.eles || null, snip); res.coords = snipped.coords; res.eles = snipped.eles;
     const cum = cumulative(res.coords), total = cum[cum.length - 1];
     const err = Math.abs(total - targetM) / targetM;
-    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap: 0, score: err, seed, seq: seq.slice() };
+    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap: overlapFraction(resample(res.coords, cum, 25).pts), score: err, seed, seq: seq.slice() };
     if (!best || err < best.err) best = cand;
     if (err < 0.12) break;
     if (total > targetM * 1.12) {
@@ -1009,6 +1048,7 @@ async function generateLoop(start, targetM, seed, onProgress, router) {
       let res;
       try { res = await router(wps); }
       catch (e) { if (e.kind === 'noroute') { bearingDeg = (bearingDeg + 75) % 360; continue; } throw e; }
+      const snipped = removeSpurs(res.coords, res.eles || null, findSpurs(res.coords)); res.coords = snipped.coords; res.eles = snipped.eles;
       const cum = cumulative(res.coords), total = cum[cum.length - 1];
       if (total < 100) { bearingDeg = (bearingDeg + 75) % 360; continue; }
       const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
