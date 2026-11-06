@@ -248,7 +248,7 @@ a.btn{text-decoration:none}
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p class="tag" id="version">Round Here v5.3</p>
+        <p class="tag" id="version">Round Here v5.4</p>
       </div>
     </div>
 
@@ -1021,6 +1021,7 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
   if (!seq.some(e => e.poi)) throw noPoi();
   const best = await fitTour(start, seq, targetM, router, onProgress, seed, pois);
   if (!best) throw noPoi();
+  if (best.overlap > 0.25 || best.err > 0.15) throw new RouteError('quiet', 'tour would double back or miss the distance');
   best.stops = buildStops(best, start);
   delete best.seq;
   best.theme = theme; best.targetM = targetM; best.pool = pois.map(slimPoi); best.skipped = [];
@@ -1080,7 +1081,9 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
     const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
     // A loop that is a bit long beats one that walks the same way back.
     const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap, score: err + 0.6 * Math.max(0, overlap - 0.08), seed, seq: seq.slice() };
-    if (!best || cand.score < best.score) best = cand;
+    // Keep the attempt nearest the asked-for distance among those that don't double back; a doubling-back one only as a last resort.
+    if (overlap <= 0.25) { if (!best || best.overlap > 0.25 || err < best.err) best = cand; }
+    else if (!best || (best.overlap > 0.25 && cand.score < best.score)) best = cand;
     if (overlap > 0.25 && !seq.some(e => e.ret) && attempt < 4) { seq = seq.concat([{ p: returnFiller(start, res.coords, cum, targetM), poi: null, ret: true }]); continue; }
     if (err < 0.08) break;
     if (total > targetM * 1.08) {
@@ -1191,7 +1194,8 @@ async function generateLoop(start, targetM, seed, onProgress, router) {
       const err = Math.abs(total - targetM) / targetM;
       const score = err + 0.6 * Math.max(0, overlap - 0.08);
       const cand = { coords: res.coords, eles: res.eles || null, cum, total, overlap, err, score, seed };
-      if (!best || score < best.score) best = cand;
+      if (overlap <= 0.25) { if (!best || best.overlap > 0.25 || err < best.err) best = cand; }
+      else if (!best || (best.overlap > 0.25 && score < best.score)) best = cand;
       if (err < 0.05) break;
       r = Math.min(25000, Math.max(150, r * Math.pow(targetM / total, 0.9)));
     }
@@ -1451,6 +1455,7 @@ async function makeLoop(seed) {
         try { const r = await generateTour(start, targetM, seed, router, progress, state.theme); r.kind = 'tour'; return r; }
         catch (e) {
           if (e.kind === 'nopoi') toast(e.message, 6000);
+          else if (e.kind === 'quiet') { /* no usable circuit with stops here: make a plain loop, say nothing */ }
           else if (e.kind === 'places') toast(e.message + ' Making a plain loop instead.', 7000);
           else if (e.kind === 'limit') { toast(e.message + ' Plain loop with standard routing for now.', 8000); throw Object.assign(new RouteError('key', e.message), { limited: true }); }
           else throw e;
