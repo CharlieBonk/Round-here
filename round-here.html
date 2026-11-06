@@ -248,7 +248,7 @@ a.btn{text-decoration:none}
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p class="tag" id="version">Round Here v5.1</p>
+        <p class="tag" id="version">Round Here v5.2</p>
       </div>
     </div>
 
@@ -374,17 +374,14 @@ function localProjector(origin) {
   const k = Math.cos(rad(origin[0])) * EARTH_R * Math.PI / 180, ky = EARTH_R * Math.PI / 180;
   return p => [(p[1] - origin[1]) * k, (p[0] - origin[0]) * ky];
 }
-// Fraction of evenly spaced route points that revisit a 30 m cell seen much earlier (out-and-back).
-function overlapFraction(pts) {
-  if (pts.length < 10) return 0;
-  const proj = localProjector(pts[0]), cell = 30, seen = new Map(), n = pts.length, gap = Math.max(10, Math.floor(n * 0.05));
+// Share of evenly spaced route points that pass within 25 m of a part of the route walked at least 200 m earlier (out-and-back, either pavement).
+function overlapFraction(pts, tol) {
+  const n = pts.length; if (n < 12) return 0;
+  tol = tol || 25; const proj = localProjector(pts[0]), xy = pts.map(proj), t2 = tol * tol, gap = 8;
   let over = 0;
-  for (let i = 0; i < n; i++) {
-    const [x, y] = proj(pts[i]);
-    const k = Math.floor(x / cell) + ',' + Math.floor(y / cell);
-    const prev = seen.get(k);
-    if (prev === undefined) seen.set(k, i);
-    else if (i - prev > gap) over++;
+  for (let i = gap; i < n; i++) {
+    const x = xy[i][0], y = xy[i][1];
+    for (let j = 0; j <= i - gap; j++) { const dx = xy[j][0] - x, dy = xy[j][1] - y; if (dx * dx + dy * dy <= t2) { over++; break; } }
   }
   return over / n;
 }
@@ -470,7 +467,7 @@ function planWaypoints(start, r, bearingDeg, clockwise, K, jitter) {
 }
 // ---- Tour planning ----
 // Wikipedia short descriptions that mean "not a place you can stand at".
-const PLACE_EXCLUDE = /\b(town|city|village|hamlet|suburb|civil parish|parish|district|borough|county|ward|constituency|neighbourhood|region|settlement|river|stream|brook|road|street|motorway|avenue|company|business|brand|primary school|secondary school|grammar school|high school|academy|football club|cricket club|rugby club|hockey club|sports club|sports team|radio station|newspaper|magazine|bus route|railway line|electoral|census|surname|given name|politician|footballer|cricketer|actor|singer|writer|musician|band|album|song|film|television|series|episode|novel|murder|disaster|accident|explosion|crash|shooting|riot|wikimedia|disambiguation)\b/i;
+const PLACE_EXCLUDE = /\b(town|city|village|hamlet|suburb|civil parish|parish|district|borough|county|ward|constituency|neighbourhood|region|settlement|river|stream|brook|road|street|motorway|avenue|company|business|brand|primary school|secondary school|grammar school|high school|academy|hospital|hospice|clinic|surgery|(football|cricket|rugby|hockey|netball|basketball|baseball|athletic|athletics|bowls|golf) (club|team)|sports club|sports team|radio station|newspaper|magazine|bus route|railway line|electoral|census|surname|given name|politician|footballer|cricketer|actor|singer|writer|musician|band|album|song|film|television|series|episode|novel|murder|disaster|accident|explosion|crash|shooting|riot|wikimedia|disambiguation)\b/i;
 // The same idea for descriptions on other languages' Wikipedias (settlements, rivers, companies, schools, clubs, people, media).
 const PLACE_EXCLUDE_ML = /\b(município|municipio|municipalité|municipality|freguesia|concelho|comune|commune|gemeinde|gemeente|gmina|obec|ciudad|cidade|città|ville|stadt|stad|miasto|město|dorf|aldeia|pueblo|villaggio|quartier|bairro|barrio|quartiere|stadtteil|wijk|dzielnica|distrito|distretto|bezirk|província|provincia|provinz|região|región|région|regione|comarca|rio|río|rivière|fluss|fiume|rivier|rzeka|empresa|entreprise|unternehmen|azienda|bedrijf|firma|escola|escuela|école|schule|scuola|szkoła|liceu|liceo|lycée|clube|futebol|fútbol|calcio|fußball|voetbal|équipe|verein|político|politico|politicien|politiker|polityk|escritor|escritora|écrivain|schriftsteller|scrittore|schrijver|pisarz|cantor|cantora|cantante|chanteur|chanteuse|sänger|zanger|ator|atriz|actriz|acteur|actrice|schauspieler|attore|attrice|aktor|futebolista|futbolista|footballeur|fußballspieler|calciatore|voetballer|piłkarz|jogador|jugador|joueur|spieler|giocatore|speler|banda|gruppo|groupe|álbum|canção|canción|chanson|lied|canzone|filme|película|série|romance|novela|romanzo|desambiguação|desambiguación|homonymie|begriffsklärung|disambigua|doorverwijspagina|ujednoznacznienie|jornal|periódico|journal|zeitung|giornale|krant|estrada|carretera|straße|strada|straat|rua|calle|rue|avenida|allee)\b/i;
 function isPlaceLike(title, desc, lang) {
@@ -533,26 +530,41 @@ function decodePolyline(str) {
   return out;
 }
 // ---- Out-and-back spurs ----
-// A spur is a stretch the route walks and then walks straight back along. Returns [{t, m, len, tip, base}], t = tip index, indices t-m..t+m.
+// A spur is a stretch walked out and then back within `tol` metres of itself, pavement-either-side included. The route turns through
+// more than 120 degrees at the tip; both legs are then resampled every 10 m from the tip and compared pair by pair.
 function findSpurs(coords, tol) {
-  tol = tol || 6; const n = coords.length, out = [];
-  for (let t = 1; t < n - 1; t++) {
-    if (haversine(coords[t - 1], coords[t + 1]) > tol) continue;
-    let m = 1;
-    while (t - 1 - m >= 0 && t + 1 + m < n && haversine(coords[t - 1 - m], coords[t + 1 + m]) <= tol) m++;
-    let len = 0; for (let i = t - m; i < t; i++) len += haversine(coords[i], coords[i + 1]);
-    if (len > 8) out.push({ t, m, len, tip: coords[t], base: coords[t - m] });
-    t = t + m;
+  tol = tol || 25; const n = coords.length; if (n < 3) return [];
+  const cum = cumulative(coords), out = [];
+  let t = 1;
+  while (t < n - 1) {
+    const turn = Math.abs(((bearingBetween(coords[t], coords[t + 1]) - bearingBetween(coords[t - 1], coords[t]) + 540) % 360) - 180);
+    if (haversine(coords[t - 1], coords[t + 1]) > tol || turn < 60) { t++; continue; }
+    const tipD = cum[t], maxBack = tipD, maxFwd = cum[n - 1] - tipD;
+    let k = 0;
+    while ((k + 1) * 10 <= maxBack && (k + 1) * 10 <= maxFwd && haversine(pointAt(coords, cum, tipD - (k + 1) * 10), pointAt(coords, cum, tipD + (k + 1) * 10)) <= tol) k++;
+    const len = k * 10;
+    if (len < 40) { t++; continue; }
+    let iBase = t; while (iBase > 0 && cum[iBase] > tipD - len) iBase--;
+    let jBase = t; while (jBase < n - 1 && cum[jBase] < tipD + len) jBase++;
+    out.push({ t, iBase, jBase, len, tip: coords[t], base: pointAt(coords, cum, tipD - len), baseD: tipD - len, retD: tipD + len });
+    t = jBase + 1;
   }
   return out;
 }
-// Cut the given spurs out (keeping the base point). eles, if given, is trimmed in step.
+// Cut the given spurs out, joining the two base points (at most tol apart). eles, if given, is trimmed in step.
 function removeSpurs(coords, eles, spurs) {
-  if (!spurs.length) return { coords, eles };
-  const drop = new Uint8Array(coords.length);
-  for (const sp of spurs) for (let i = sp.t - sp.m + 1; i <= sp.t + sp.m && i < coords.length; i++) drop[i] = 1;
+  if (!spurs || !spurs.length) return { coords, eles };
+  const cum = cumulative(coords), drop = new Uint8Array(coords.length), insertAt = {};
+  for (const sp of spurs) {
+    for (let i = sp.iBase + 1; i <= sp.jBase - 1; i++) drop[i] = 1;
+    insertAt[sp.iBase] = [pointAt(coords, cum, sp.baseD), pointAt(coords, cum, sp.retD)];
+  }
   const c2 = [], e2 = eles ? [] : null;
-  for (let i = 0; i < coords.length; i++) { if (drop[i]) continue; c2.push(coords[i]); if (e2) e2.push(eles[i]); }
+  for (let i = 0; i < coords.length; i++) {
+    if (drop[i]) continue;
+    c2.push(coords[i]); if (e2) e2.push(eles[i]);
+    if (insertAt[i]) { for (const q of insertAt[i]) { c2.push(q); if (e2) e2.push(eles[i]); } }
+  }
   return { coords: c2, eles: e2 };
 }
 // Share payload: a compact array form of the route and its stops.
@@ -612,7 +624,7 @@ function planTour(start, pois, targetM, maxStops, detour) {
   return pts.slice(1, -1).map(p => chosen.find(c => c.p === p));
 }
 // Push the midpoint of the longest edge outwards so the loop gains roughly extraM. Returns {index, p}: insert p into seq at index.
-function stretchLoop(start, seqPts, extraM) {
+function stretchLoop(start, seqPts, extraM, avoid) {
   const pts = [start].concat(seqPts, [start]);
   let li = 0, ll = -1;
   for (let i = 0; i < pts.length - 1; i++) { const l = haversine(pts[i], pts[i + 1]); if (l > ll) { ll = l; li = i; } }
@@ -626,6 +638,12 @@ function stretchLoop(start, seqPts, extraM) {
   // Pushing the midpoint of an edge of length L out by h adds about 2*sqrt((L/2)^2 + h^2) - L; solve for h, allowing for paths being ~1.3x straight lines.
   const want = Math.max(0, extraM) / 1.3;
   const h = Math.min(1500, Math.max(200, Math.sqrt(want * (want + 2 * ll)) / 2));
+  // Try the natural direction first, then swing away from any spot that produced a dead end before.
+  const tries = [0, 35, -35, 70, -70, 110, -110];
+  for (const dA of tries) {
+    const p = destination(m, bearing + dA, h);
+    if (!avoid || !avoid.some(q => haversine(p, q) < 250)) return { index: li, p };
+  }
   return { index: li, p: destination(m, bearing, h) };
 }
 function trimText(t, max) {
@@ -928,6 +946,7 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
       if (haversine(start, c.p) < 30) continue;
       if (!matchesTheme(theme, c)) continue;
       c.score = scorePoi(c.views, !!c.thumb, rng);
+      if (/\b(railway|train|bus|tram|metro|underground|coach) (station|stop|interchange)\b/i.test(c.descEn || c.desc || '')) c.score *= 0.5;
       pois.push(c);
     }
     diag.wiki = wikiRes.value.length + ' found, ' + pois.length + ' usable';
@@ -978,7 +997,7 @@ function growWithStop(start, seq, pool, used, missingM, maxStops) {
 async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
   let best = null;
   const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
-  const used = new Set(seq.filter(e => e.poi).map(e => e.poi.id));
+  const used = new Set(seq.filter(e => e.poi).map(e => e.poi.id)), avoid = [];
   for (let attempt = 0; attempt < 5; attempt++) {
     onProgress && onProgress(2 + attempt, 6, 'Routing the tour…');
     const wps = [start].concat(seq.map(e => e.p), [start]);
@@ -995,9 +1014,10 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
     const spurs = findSpurs(res.coords), awkward = new Set(), snip = [];
     for (const sp of spurs) {
       if (sp.len <= 150) { snip.push(sp); continue; }
-      const k = seq.findIndex(e => e.poi && haversine(e.p, sp.tip) < 80);
+      const k = seq.findIndex(e => haversine(e.p, sp.tip) < 120);
       if (k < 0) { snip.push(sp); continue; }                                   // a long spur to nothing: cut it
-      if (attempt < 4 && seq.filter(e => e.poi).length > 1) awkward.add(k);    // a long spur to a stop: lose the stop and re-route
+      if (!seq[k].poi) { avoid.push(seq[k].p); awkward.add(k); continue; }      // a filler on a dead end: lose it, remember the spot
+      if (attempt < 4 && seq.filter(e => e.poi).length > 1) awkward.add(k);    // a stop behind a long dead end: lose it (a replacement is added if the loop comes up short)
       // otherwise it's the only stop: keep the spur and let the return-leg filler below turn it into a loop
     }
     if (awkward.size) { seq = seq.filter((_, k) => !awkward.has(k)); continue; }
@@ -1016,7 +1036,7 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
     } else {
       const grown = growWithStop(start, seq, pool, used, targetM - total, maxStops);
       if (grown) { seq = grown; seq.forEach(e => { if (e.poi) used.add(e.poi.id); }); }
-      else { const st = stretchLoop(start, seq.map(e => e.p), (targetM - total)); seq.splice(st.index, 0, { p: st.p, poi: null }); }
+      else { const st = stretchLoop(start, seq.map(e => e.p), (targetM - total), avoid); seq.splice(st.index, 0, { p: st.p, poi: null }); }
     }
   }
   return best;
@@ -1102,7 +1122,15 @@ async function generateLoop(start, targetM, seed, onProgress, router) {
       let res;
       try { res = await router(wps); }
       catch (e) { if (e.kind === 'noroute') { bearingDeg = (bearingDeg + 75) % 360; continue; } throw e; }
-      const snipped = removeSpurs(res.coords, res.eles || null, findSpurs(res.coords)); res.coords = snipped.coords; res.eles = snipped.eles;
+      const spurs = findSpurs(res.coords);
+      let nudged = false;
+      for (const sp of spurs) {
+        if (sp.len <= 150) continue;
+        const wi = wps.findIndex((p, i) => i > 0 && i < wps.length - 1 && haversine(p, sp.tip) < 150);
+        if (wi > 0 && calls < MAX_CALLS) { jitter[wi].a += 40; jitter[wi].r = Math.max(0.6, jitter[wi].r - 0.15); nudged = true; }
+      }
+      if (nudged) continue;
+      const snipped = removeSpurs(res.coords, res.eles || null, spurs); res.coords = snipped.coords; res.eles = snipped.eles;
       const cum = cumulative(res.coords), total = cum[cum.length - 1];
       if (total < 100) { bearingDeg = (bearingDeg + 75) % 360; continue; }
       const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
