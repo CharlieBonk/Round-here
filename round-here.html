@@ -248,7 +248,7 @@ a.btn{text-decoration:none}
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p class="tag" id="version">Round Here v5.0</p>
+        <p class="tag" id="version">Round Here v5.1</p>
       </div>
     </div>
 
@@ -623,7 +623,9 @@ function stretchLoop(start, seqPts, extraM) {
   let dx = -cx, dy = -cy; const len = Math.hypot(dx, dy);
   if (len < 1) { const q = proj(b); dx = -q[1]; dy = q[0]; }
   const bearing = (deg(Math.atan2(dx, dy)) + 360) % 360;
-  const h = Math.min(4000, Math.max(200, extraM / 2));
+  // Pushing the midpoint of an edge of length L out by h adds about 2*sqrt((L/2)^2 + h^2) - L; solve for h, allowing for paths being ~1.3x straight lines.
+  const want = Math.max(0, extraM) / 1.3;
+  const h = Math.min(1500, Math.max(200, Math.sqrt(want * (want + 2 * ll)) / 2));
   return { index: li, p: destination(m, bearing, h) };
 }
 function trimText(t, max) {
@@ -958,12 +960,15 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
 function growWithStop(start, seq, pool, used, missingM, maxStops) {
   if (!pool || !pool.length || seq.filter(e => e.poi).length >= maxStops) return null;
   const pts = [start].concat(seq.map(e => e.p), [start]), need = missingM / 1.3;
+  const proj = localProjector(start), xy = pts.map(proj);
   let bestC = null, bestV = -Infinity, bestIns = null;
   for (const c of pool) {
     if (used.has(c.id)) continue;
     const ins = insertionCost(pts, c.p);
     if (ins.cost < 60 || ins.cost > need * 1.6) continue;
-    const v = c.score / (1 + Math.abs(ins.cost - need) / 600);
+    // Prefer places off to the side of the current line, so the loop opens out instead of running further along the same way.
+    const clear = Math.min(600, nearestOnRoute(xy, proj(c.p), 0, xy.length - 1).dist);
+    const v = c.score * (1 + clear / 600) / (1 + Math.abs(ins.cost - need) / 600);
     if (v > bestV) { bestV = v; bestC = c; bestIns = ins; }
   }
   if (!bestC) return null;
@@ -989,18 +994,24 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
     }
     const spurs = findSpurs(res.coords), awkward = new Set(), snip = [];
     for (const sp of spurs) {
-      const k = sp.len > 150 ? seq.findIndex(e => e.poi && haversine(e.p, sp.tip) < 80) : -1;
-      if (k >= 0 && attempt < 4 && seq.filter(e => e.poi).length > 1) awkward.add(k); else snip.push(sp);
+      if (sp.len <= 150) { snip.push(sp); continue; }
+      const k = seq.findIndex(e => e.poi && haversine(e.p, sp.tip) < 80);
+      if (k < 0) { snip.push(sp); continue; }                                   // a long spur to nothing: cut it
+      if (attempt < 4 && seq.filter(e => e.poi).length > 1) awkward.add(k);    // a long spur to a stop: lose the stop and re-route
+      // otherwise it's the only stop: keep the spur and let the return-leg filler below turn it into a loop
     }
     if (awkward.size) { seq = seq.filter((_, k) => !awkward.has(k)); continue; }
     const snipped = removeSpurs(res.coords, res.eles || null, snip); res.coords = snipped.coords; res.eles = snipped.eles;
     const cum = cumulative(res.coords), total = cum[cum.length - 1];
     const err = Math.abs(total - targetM) / targetM;
-    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap: overlapFraction(resample(res.coords, cum, 25).pts), score: err, seed, seq: seq.slice() };
-    if (!best || err < best.err) best = cand;
+    const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
+    // A loop that is a bit long beats one that walks the same way back.
+    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap, score: err + 0.6 * Math.max(0, overlap - 0.08), seed, seq: seq.slice() };
+    if (!best || cand.score < best.score) best = cand;
+    if (overlap > 0.25 && !seq.some(e => e.ret) && attempt < 4) { seq = seq.concat([{ p: returnFiller(start, res.coords, cum, targetM), poi: null, ret: true }]); continue; }
     if (err < 0.08) break;
     if (total > targetM * 1.08) {
-      if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi)) break;
+      if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi && !e.ret)) break;
       seq = dropWeakest(seq, start);
     } else {
       const grown = growWithStop(start, seq, pool, used, targetM - total, maxStops);
@@ -1047,10 +1058,21 @@ async function swapStop(route, stopId, router, onProgress) {
   Object.assign(best, { theme: route.theme, targetM, pool, skipped, kind: 'tour', mode: route.mode, startMode: route.startMode, createdAt: Date.now(), profile: null, ascent: null, descent: null, replaced: bestC ? bestC.title : null });
   return best;
 }
-// Remove a filler first; otherwise the stop whose straight-line detour is worst for its value.
+// A tour that goes out and straight back needs its return leg pushed sideways: a waypoint beside the midpoint, on whichever side is further from the existing line.
+function returnFiller(start, coords, cum, targetM) {
+  const total = cum[cum.length - 1], tip = pointAt(coords, cum, total / 2);
+  const mid = [(start[0] + tip[0]) / 2, (start[1] + tip[1]) / 2], dir = bearingBetween(start, tip);
+  const h = Math.min(600, Math.max(200, targetM * 0.08));
+  const sample = resample(coords, cum, 50).pts;
+  const sides = [destination(mid, dir + 90, h), destination(mid, dir - 90, h)];
+  const clearance = sides.map(p => Math.min.apply(null, sample.map(q => haversine(p, q))));
+  return clearance[0] >= clearance[1] ? sides[0] : sides[1];
+}
+// Remove a plain filler first (never the return-leg one); otherwise the stop whose straight-line detour is worst for its value.
 function dropWeakest(seq, start) {
-  const fillers = seq.filter(e => !e.poi);
+  const fillers = seq.filter(e => !e.poi && !e.ret);
   if (fillers.length) { const i = seq.indexOf(fillers[fillers.length - 1]); return seq.filter((_, k) => k !== i); }
+  if (!seq.some(e => e.poi)) return seq.filter(e => !e.ret);
   const pts = [start].concat(seq.map(e => e.p), [start]);
   let wi = -1, wv = -Infinity;
   seq.forEach((e, i) => {
