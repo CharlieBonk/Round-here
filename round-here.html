@@ -248,7 +248,7 @@ a.btn{text-decoration:none}
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p class="tag" id="version">Round Here v5.2</p>
+        <p class="tag" id="version">Round Here v5.3</p>
       </div>
     </div>
 
@@ -623,6 +623,50 @@ function planTour(start, pois, targetM, maxStops, detour) {
   twoOpt(pts);
   return pts.slice(1, -1).map(p => chosen.find(c => c.p === p));
 }
+// Ring planner: find the direction with the most worthwhile places, lay a ring of the right circumference through them,
+// take the best stops near the ring and put plain ring points in any empty arc, then order everything round the ring.
+// Returns the waypoint sequence (stops and fillers) without the start.
+function planTourRing(start, pois, targetM, maxStops, rng) {
+  const L = targetM / 1.3, r = L / (2 * Math.PI);
+  let bestB = 0, bestS = -Infinity;
+  for (let b = 0; b < 360; b += 20) {
+    const centre = destination(start, b, r);
+    let sc = 0;
+    for (const c of pois) { const d = haversine(centre, c.p); if (d < 1.6 * r) sc += c.score * (1 - Math.abs(d - r) / (1.6 * r)); }
+    sc *= 0.8 + 0.4 * (rng ? rng() : 0.5);
+    if (sc > bestS) { bestS = sc; bestB = b; }
+  }
+  const centre = destination(start, bestB, r);
+  const ring = pois.filter(c => { const d = haversine(centre, c.p); return d > 0.25 * r && d < 1.6 * r; });
+  // Greedy choice under the straight-line budget, scored by value per metre of detour from the ring.
+  const pts = [start, start], chosen = [], avail = ring.slice();
+  while (chosen.length < maxStops && avail.length) {
+    const curLen = loopLength(pts);
+    let bi = -1, bv = -Infinity, bins = null;
+    for (let i = 0; i < avail.length; i++) {
+      const ins = insertionCost(pts, avail[i].p);
+      if (curLen + ins.cost > L) continue;
+      const off = Math.abs(haversine(centre, avail[i].p) - r);
+      const v = avail[i].score / (1 + ins.cost / 800) / (1 + off / r);
+      if (v > bv) { bv = v; bi = i; bins = ins; }
+    }
+    if (bi < 0) break;
+    pts.splice(bins.at, 0, avail[bi].p); chosen.push(avail[bi]); avail.splice(bi, 1);
+  }
+  // Angles round the centre; the start sits on the ring too.
+  const ang = p => bearingBetween(centre, p);
+  const a0 = ang(start), rel = a => ((ang(a) - a0) % 360 + 360) % 360;
+  const entries = chosen.map(c => ({ p: c.p, poi: c, a: rel(c.p) }));
+  // Fill arcs with nothing in them (the start covers the arc at 0).
+  const K = 6;
+  for (let k = 1; k < K; k++) {
+    const lo = (k - 0.5) * (360 / K), hi = (k + 0.5) * (360 / K);
+    if (!entries.some(e => e.a >= lo && e.a < hi)) entries.push({ p: destination(centre, a0 + k * (360 / K), r), poi: null, a: k * (360 / K) });
+  }
+  const clockwise = rng ? rng() < 0.5 : true;
+  entries.sort((x, y) => clockwise ? x.a - y.a : y.a - x.a);
+  return entries.map(e => ({ p: e.p, poi: e.poi }));
+}
 // Push the midpoint of the longest edge outwards so the loop gains roughly extraM. Returns {index, p}: insert p into seq at index.
 function stretchLoop(start, seqPts, extraM, avoid) {
   const pts = [start].concat(seqPts, [start]);
@@ -645,6 +689,14 @@ function stretchLoop(start, seqPts, extraM, avoid) {
     if (!avoid || !avoid.some(q => haversine(p, q) < 250)) return { index: li, p };
   }
   return { index: li, p: destination(m, bearing, h) };
+}
+function sameName(a, b) {
+  const norm = x => String(x || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\b(the|a|an|of|and)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const x = norm(a), y = norm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [sh, lo] = x.length <= y.length ? [x, y] : [y, x];
+  return sh.length >= 10 && lo.startsWith(sh + ' ');
 }
 function trimText(t, max) {
   t = String(t || '').replace(/\s+/g, ' ').trim();
@@ -955,17 +1007,18 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
   if (osmRes.status === 'fulfilled') {
     for (const o of osmRes.value) {
       if (haversine(start, o.p) < 30) continue;
-      // Same place on Wikipedia: keep the Wikipedia card, but credit it for being a tagged attraction or park too.
-      const twin = pois.find(c => c.kind === 'wiki' && haversine(c.p, o.p) < 80);
+      // Same place on Wikipedia (close by, or the same name within 1.5 km): keep the Wikipedia card, credit it for being a tagged attraction or park too.
+      const twin = pois.find(c => c.kind === 'wiki' && (haversine(c.p, o.p) < 80 || (sameName(c.title, o.title) && haversine(c.p, o.p) < 1500)));
       if (twin) { twin.score += 0.8; continue; }
       pois.push(o);
     }
   } else if (placesRequired && !pois.length) throw osmRes.reason;
   if (!pois.length) throw noPoi();
   const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
-  const chosen = planTour(start, pois, targetM, maxStops);
-  if (!chosen.length) throw noPoi();
-  const seq = chosen.map(c => ({ p: c.p, poi: c }));
+  let seq = planTourRing(start, pois, targetM, maxStops, rng);
+  // Nothing near any ring (say one park well beyond it): fall back to reaching the best places directly; the fitter then forces a different way back.
+  if (!seq.some(e => e.poi)) seq = planTour(start, pois, targetM, maxStops).map(c => ({ p: c.p, poi: c }));
+  if (!seq.some(e => e.poi)) throw noPoi();
   const best = await fitTour(start, seq, targetM, router, onProgress, seed, pois);
   if (!best) throw noPoi();
   best.stops = buildStops(best, start);
@@ -1075,7 +1128,8 @@ async function swapStop(route, stopId, router, onProgress) {
   best.stops = buildStops(best, start);
   for (const s of best.stops) { const old = route.stops.find(o => o.id === s.id); if (old) { s.extract = old.extract; s.thumb = s.thumb || old.thumb; } }
   delete best.seq;
-  Object.assign(best, { theme: route.theme, targetM, pool, skipped, kind: 'tour', mode: route.mode, startMode: route.startMode, createdAt: Date.now(), profile: null, ascent: null, descent: null, replaced: bestC ? bestC.title : null });
+  const newOnes = best.stops.filter(s => !remaining.some(o => o.id === s.id));
+  Object.assign(best, { theme: route.theme, targetM, pool, skipped, kind: 'tour', mode: route.mode, startMode: route.startMode, createdAt: Date.now(), profile: null, ascent: null, descent: null, replaced: newOnes.length ? newOnes[0].title : null });
   return best;
 }
 // A tour that goes out and straight back needs its return leg pushed sideways: a waypoint beside the midpoint, on whichever side is further from the existing line.
