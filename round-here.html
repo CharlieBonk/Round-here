@@ -217,9 +217,10 @@ a.btn{text-decoration:none}
 
     <!-- PLAN -->
     <div class="view" id="viewPlan">
+      <div class="eyebrow">What kind of walk?</div>
       <div class="chips themes" id="themes" aria-label="Walk type">
-        <button data-theme="walk">Just walk</button>
-        <button data-theme="all" class="on">Sights</button>
+        <button data-theme="walk" class="on">Just walk</button>
+        <button data-theme="all">Sights</button>
         <button data-theme="history">History</button>
         <button data-theme="pubs">Pubs</button>
         <button data-theme="green">Green</button>
@@ -247,7 +248,7 @@ a.btn{text-decoration:none}
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p class="tag" id="version">Round Here v4.9</p>
+        <p class="tag" id="version">Round Here v5.0</p>
       </div>
     </div>
 
@@ -854,10 +855,10 @@ async function wikiCandidates(start, radius) {
 }
 
 // ---------- Places (Geoapify via the proxy, for pubs and green spaces) ----------
-const THEME_USES_PLACES = { pubs: true, green: true };
+const THEME_USES_PLACES = { all: true, pubs: true, green: true };
 const diag = { last: '' };
 function osmDescribe(t) {
-  const label = t.amenity === 'pub' ? 'Pub' : t.amenity === 'biergarten' ? 'Beer garden' : t.leisure === 'park' ? 'Park' : t.leisure === 'nature_reserve' ? 'Nature reserve' : t.leisure === 'garden' ? 'Garden' : t.tourism === 'viewpoint' ? 'Viewpoint' : t.natural === 'beach' ? 'Beach' : t.natural === 'peak' ? 'Hill' : t.natural === 'wood' || t.landuse === 'forest' ? 'Woodland' : t.natural === 'water' ? 'Lake' : t.natural === 'heath' ? 'Heath' : t.boundary === 'national_park' ? 'National park' : t.boundary === 'protected_area' ? 'Protected area' : 'Place';
+  const label = t.amenity === 'pub' ? 'Pub' : t.amenity === 'biergarten' ? 'Beer garden' : t.tourism === 'attraction' ? 'Attraction' : t.historic ? 'Historic site' : t.leisure === 'park' ? 'Park' : t.leisure === 'nature_reserve' ? 'Nature reserve' : t.leisure === 'garden' ? 'Garden' : t.tourism === 'viewpoint' ? 'Viewpoint' : t.natural === 'beach' ? 'Beach' : t.natural === 'peak' ? 'Hill' : t.natural === 'wood' || t.landuse === 'forest' ? 'Woodland' : t.natural === 'water' ? 'Lake' : t.natural === 'heath' ? 'Heath' : t.boundary === 'national_park' ? 'National park' : t.boundary === 'protected_area' ? 'Protected area' : 'Place';
   const bits = [];
   if (t.description) bits.push(t.description.replace(/\s+/g, ' ').trim().replace(/\.?$/, '.'));
   if (t['addr:street']) bits.push('On ' + t['addr:street'] + '.');
@@ -890,14 +891,15 @@ async function placesCandidates(start, radius, theme, rng) {
       const cats = p.categories || [];
       if (cats.some(c => c.startsWith('catering.pub'))) t.amenity = 'pub'; else if (cats.some(c => c.startsWith('catering.biergarten'))) t.amenity = 'biergarten';
       else if (cats.some(c => c.startsWith('leisure.park.garden'))) t.leisure = 'garden'; else if (cats.some(c => c.startsWith('leisure.park.nature_reserve'))) t.leisure = 'nature_reserve'; else if (cats.some(c => c.startsWith('leisure.park'))) t.leisure = 'park';
-      else if (cats.some(c => c.includes('viewpoint'))) t.tourism = 'viewpoint'; else if (cats.some(c => c.startsWith('beach'))) t.natural = 'beach'; else if (cats.some(c => c.includes('mountain'))) t.natural = 'peak'; else if (cats.some(c => c.startsWith('natural.forest'))) t.natural = 'wood'; else if (cats.some(c => c.startsWith('natural.water'))) t.natural = 'water'; else if (cats.some(c => c.startsWith('national_park'))) t.boundary = 'national_park';
+      else if (cats.some(c => c.includes('viewpoint'))) t.tourism = 'viewpoint'; else if (cats.some(c => c.startsWith('tourism.attraction'))) t.tourism = 'attraction'; else if (cats.some(c => c.startsWith('tourism.sights'))) t.historic = 'yes'; else if (cats.some(c => c.startsWith('beach'))) t.natural = 'beach'; else if (cats.some(c => c.includes('mountain'))) t.natural = 'peak'; else if (cats.some(c => c.startsWith('natural.forest'))) t.natural = 'wood'; else if (cats.some(c => c.startsWith('natural.water'))) t.natural = 'water'; else if (cats.some(c => c.startsWith('national_park'))) t.boundary = 'national_park';
     }
     if (p.opening_hours && !t.opening_hours) t.opening_hours = p.opening_hours;
     const d = osmDescribe(t);
     let wiki = t.wikipedia || null; if (wiki && wiki.indexOf(':') < 0) wiki = 'en:' + wiki;
     const osmType = { n: 'node', w: 'way', r: 'relation' }[t.osm_type] || t.osm_type;
     const osmRef = t.osm_id && osmType ? osmType + '/' + t.osm_id : null;
-    const base = 1 + (wiki || t.wikidata ? 1.5 : 0) + (t.historic || t.heritage ? 0.6 : 0) + (t.real_ale === 'yes' ? 0.2 : 0) + (t.description ? 0.2 : 0) + (p.website ? 0.1 : 0);
+    const kindBonus = t.tourism === 'attraction' || t.tourism === 'viewpoint' ? 1.0 : t.leisure || t.natural === 'beach' ? 0.8 : 0;
+    const base = 1 + kindBonus + (wiki || t.wikidata ? 1.2 : 0) + (t.historic || t.heritage ? 0.4 : 0) + (t.real_ale === 'yes' ? 0.2 : 0) + (t.description ? 0.2 : 0) + (p.website ? 0.1 : 0);
     out.push({ id: osmRef ? 'osm:' + osmRef : 'gp:' + (p.place_id || '').slice(0, 24), kind: 'osm', lang: null, pageid: null, title: p.name, p: [p.lat, p.lon], desc: d.label, descEn: d.label, views: 0, thumb: null, wiki, osmText: d.text, url: wiki ? wikiTitleUrl(wiki) : osmRef ? 'https://www.openstreetmap.org/' + osmRef : (p.website || '#'), link: wiki ? 'Wikipedia' : osmRef ? 'OpenStreetMap' : 'Website', score: base * (0.6 + 0.8 * rng()) });
   }
   diag.places = out.length + ' from Geoapify';
@@ -914,7 +916,8 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
   const noPoi = () => new RouteError('nopoi', theme === 'pubs' ? 'No pubs within reach here, so this is a plain loop.' : theme === 'green' ? 'No parks or viewpoints within reach here, so this is a plain loop.' : theme === 'history' ? 'No historic places within reach here, so this is a plain loop.' : 'No landmarks within reach here, so this is a plain loop.');
   const usesOsm = !!THEME_USES_PLACES[theme];
   const [wikiRes, osmRes] = await Promise.allSettled([wikiCandidates(start, radius), usesOsm ? placesCandidates(start, radius, theme, rng) : Promise.resolve([])]);
-  if (usesOsm && osmRes.status === 'rejected' && osmRes.reason && osmRes.reason.kind === 'places') throw osmRes.reason;
+  const placesRequired = theme === 'pubs' || theme === 'green';
+  if (placesRequired && osmRes.status === 'rejected' && osmRes.reason && osmRes.reason.kind === 'places') throw osmRes.reason;
   if (wikiRes.status === 'rejected' && (!usesOsm || osmRes.status === 'rejected')) throw wikiRes.reason;
   let pois = [];
   if (wikiRes.status === 'fulfilled') {
@@ -931,16 +934,18 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
   if (osmRes.status === 'fulfilled') {
     for (const o of osmRes.value) {
       if (haversine(start, o.p) < 30) continue;
-      if (pois.some(c => c.kind === 'wiki' && haversine(c.p, o.p) < 80)) continue;
+      // Same place on Wikipedia: keep the Wikipedia card, but credit it for being a tagged attraction or park too.
+      const twin = pois.find(c => c.kind === 'wiki' && haversine(c.p, o.p) < 80);
+      if (twin) { twin.score += 0.8; continue; }
       pois.push(o);
     }
-  } else if (usesOsm && !pois.length) throw osmRes.reason;
+  } else if (placesRequired && !pois.length) throw osmRes.reason;
   if (!pois.length) throw noPoi();
   const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
   const chosen = planTour(start, pois, targetM, maxStops);
   if (!chosen.length) throw noPoi();
   const seq = chosen.map(c => ({ p: c.p, poi: c }));
-  const best = await fitTour(start, seq, targetM, router, onProgress, seed);
+  const best = await fitTour(start, seq, targetM, router, onProgress, seed, pois);
   if (!best) throw noPoi();
   best.stops = buildStops(best, start);
   delete best.seq;
@@ -949,8 +954,26 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
   return best;
 }
 // Route a sequence of stops (and fillers) from the start and back, trimming or stretching until the length fits. Null if nothing routes.
-async function fitTour(start, seq, targetM, router, onProgress, seed) {
+// When a loop comes up short, bring in the best unused candidate that adds roughly the missing distance; pad with a blind bulge only when none fits.
+function growWithStop(start, seq, pool, used, missingM, maxStops) {
+  if (!pool || !pool.length || seq.filter(e => e.poi).length >= maxStops) return null;
+  const pts = [start].concat(seq.map(e => e.p), [start]), need = missingM / 1.3;
+  let bestC = null, bestV = -Infinity, bestIns = null;
+  for (const c of pool) {
+    if (used.has(c.id)) continue;
+    const ins = insertionCost(pts, c.p);
+    if (ins.cost < 60 || ins.cost > need * 1.6) continue;
+    const v = c.score / (1 + Math.abs(ins.cost - need) / 600);
+    if (v > bestV) { bestV = v; bestC = c; bestIns = ins; }
+  }
+  if (!bestC) return null;
+  const next = seq.slice(); next.splice(bestIns.at - 1, 0, { p: bestC.p, poi: bestC });
+  return next;
+}
+async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
   let best = null;
+  const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
+  const used = new Set(seq.filter(e => e.poi).map(e => e.poi.id));
   for (let attempt = 0; attempt < 5; attempt++) {
     onProgress && onProgress(2 + attempt, 6, 'Routing the tour…');
     const wps = [start].concat(seq.map(e => e.p), [start]);
@@ -980,8 +1003,9 @@ async function fitTour(start, seq, targetM, router, onProgress, seed) {
       if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi)) break;
       seq = dropWeakest(seq, start);
     } else {
-      const st = stretchLoop(start, seq.map(e => e.p), (targetM - total));
-      seq.splice(st.index, 0, { p: st.p, poi: null });
+      const grown = growWithStop(start, seq, pool, used, targetM - total, maxStops);
+      if (grown) { seq = grown; seq.forEach(e => { if (e.poi) used.add(e.poi.id); }); }
+      else { const st = stretchLoop(start, seq.map(e => e.p), (targetM - total)); seq.splice(st.index, 0, { p: st.p, poi: null }); }
     }
   }
   return best;
@@ -1015,7 +1039,7 @@ async function swapStop(route, stopId, router, onProgress) {
   }
   if (bestC) seq.splice(bestIns.at - 1, 0, { p: bestC.p, poi: bestC });
   if (!seq.some(e => e.poi)) return null;
-  const best = await fitTour(start, seq, targetM, router, onProgress, route.seed);
+  const best = await fitTour(start, seq, targetM, router, onProgress, route.seed, pool.filter(c => !skipped.includes(c.id)));
   if (!best) return null;
   best.stops = buildStops(best, start);
   for (const s of best.stops) { const old = route.stops.find(o => o.id === s.id); if (old) { s.extract = old.extract; s.thumb = s.thumb || old.thumb; } }
@@ -1202,7 +1226,7 @@ const state = {
   mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
   green: true,
-  theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'all')) >= 0 ? store.get('theme', 'all') : 'all'
+  theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'walk')) >= 0 ? store.get('theme', 'walk') : 'walk'
 };
 state.kind = state.theme === 'walk' ? 'loop' : 'tour';
 
@@ -1223,7 +1247,7 @@ elK.themes.addEventListener('click', e => {
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
   const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
-  const tour = { walk: ' A plain loop with no stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
+  const tour = { walk: ' A plain loop with no stops. Pick Sights, History, Pubs or Green for a tour with stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
   el.planHint.textContent = base + (tour[state.theme] || '');
 }
 
