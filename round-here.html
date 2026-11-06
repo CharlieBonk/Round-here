@@ -163,6 +163,10 @@ input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
 .card-body .row .btn{flex:1}
 .icon-btn.small{width:36px;height:36px;border-radius:10px;box-shadow:none;font-size:22px;line-height:1;flex:none}
 a.btn{text-decoration:none}
+.nudge{display:flex;align-items:center;gap:8px;background:var(--accent-soft);border-radius:12px;padding:8px 8px 8px 12px}
+.nudge a{flex:1;min-width:0;color:var(--accent);font-weight:700;font-size:14px;text-decoration:none}
+.nudge-x{flex:none;width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--accent);font-size:20px;line-height:1;cursor:pointer}
+.coffee{width:100%;justify-content:center}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Map markers */
@@ -242,8 +246,10 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <p>Loops use a hiking profile that leans towards parks, woods and quiet streets rather than the shortest line. Tours pick their stops from Wikipedia and OpenStreetMap. Nothing to sign up for.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
+        <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee · £4</a>
+        <p class="hint">If this got you out for a walk, £4 keeps the routing and the lookups paid for. One-off or monthly, no account needed.</p>
         <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v4.4</p>
+        <p class="tag" id="version">Round Here v4.5</p>
       </div>
     </div>
 
@@ -257,6 +263,10 @@ a.btn{text-decoration:none}
         <div class="stat"><div class="l">Distance</div><div class="v" id="stDist">—</div></div>
         <div class="stat"><div class="l">Ascent</div><div class="v" id="stAsc">—</div></div>
         <div class="stat"><div class="l">Est. time</div><div class="v" id="stTime">—</div></div>
+      </div>
+      <div class="nudge" id="nudge" hidden>
+        <a id="nudgeLink" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">Enjoying Round Here? Buy me a coffee ☕ £4</a>
+        <button class="nudge-x" id="nudgeClose" aria-label="Not now">×</button>
       </div>
       <div class="stops" id="stopsList" hidden></div>
       <svg class="profile" id="profile" aria-label="Elevation profile"></svg>
@@ -1224,6 +1234,16 @@ const elS = { btnSettings: $('btnSettings'), settings: $('settings'), modeTag: $
 function routingMode() { return 'green'; }
 function renderRoutingMode() { elS.modeTag.className = 'tag green'; elS.modeText.textContent = 'Green routing'; }
 function renderDiag() { const d = $('diag'); d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
+// Coffee nudge: one line on the route screen from the third loop on, gone for good once dismissed or tapped.
+const elN = { box: $('nudge'), link: $('nudgeLink'), close: $('nudgeClose'), about: $('aboutCoffee') };
+function nudgeDone() { store.set('nudge', 'done'); elN.box.hidden = true; }
+function renderNudge() {
+  const r = state.route;
+  elN.box.hidden = !(r && !r.shared && store.get('nudge', '') !== 'done' && Number(store.get('loops', 0)) >= 3);
+}
+elN.close.addEventListener('click', nudgeDone);
+elN.link.addEventListener('click', () => { store.set('nudge', 'done'); });
+elN.about.addEventListener('click', () => { store.set('nudge', 'done'); });
 elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; renderDiag(); requestAnimationFrame(setSheetHeight); });
 renderRoutingMode();
 el.distRange.value = state.targetKm;
@@ -1353,6 +1373,7 @@ function adoptRoute(route) {
     delete route.eles;
   }
   state.route = route;
+  if (!route.shared) store.set('loops', Number(store.get('loops', 0)) + 1);
   drawRoute(route); showView('route'); renderRouteStats(); fitRoute(route);
   store.set('route', serializeRoute(route));
   if (!route.profile) loadElevation(route);
@@ -1487,6 +1508,7 @@ async function loadElevation(route) {
 function renderRouteStats() {
   const r = state.route; if (!r) return;
   const th = r.theme && THEME_LABEL[r.theme] ? THEME_LABEL[r.theme] + ' ' : '';
+  renderNudge();
   el.routeEyebrow.textContent = r.stops && r.stops.length ? (r.shared ? 'Shared ' : 'Your ') + th + 'tour · ' + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : (r.shared ? 'Shared loop' : 'Your loop');
   renderStopsList();
   el.stDist.textContent = fmtKm(r.total) + ' km';
