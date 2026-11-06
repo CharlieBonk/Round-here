@@ -244,12 +244,10 @@ a.btn{text-decoration:none}
       </div>
       <div class="settings" id="settings" hidden>
         <div class="eyebrow">About</div>
-        <p>Loops use a hiking profile that leans towards parks, woods and quiet streets rather than the shortest line. Tours pick their stops from Wikipedia and OpenStreetMap. Nothing to sign up for.</p>
+        <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+        <p class="hint">If this got you out for a walk, a small donation keeps the routing and the lookups paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee · £4</a>
-        <p class="hint">If this got you out for a walk, £4 keeps the routing and the lookups paid for. One-off or monthly, no account needed.</p>
-        <p class="hint" id="diag"></p>
-        <p class="tag" id="version">Round Here v4.5</p>
+        <p class="tag" id="version">Round Here v4.8</p>
       </div>
     </div>
 
@@ -1233,7 +1231,7 @@ function renderPlanHint() {
 const elS = { btnSettings: $('btnSettings'), settings: $('settings'), modeTag: $('modeTag'), modeText: $('modeText') };
 function routingMode() { return 'green'; }
 function renderRoutingMode() { elS.modeTag.className = 'tag green'; elS.modeText.textContent = 'Green routing'; }
-function renderDiag() { const d = $('diag'); d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
+function renderDiag() { const d = $('diag'); if (!d) return; d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
 // Coffee nudge: one line on the route screen from the third loop on, gone for good once dismissed or tapped.
 const elN = { box: $('nudge'), link: $('nudgeLink'), close: $('nudgeClose'), about: $('aboutCoffee') };
 function nudgeDone() { store.set('nudge', 'done'); elN.box.hidden = true; }
