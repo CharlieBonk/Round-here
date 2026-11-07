@@ -248,7 +248,7 @@ a.btn{text-decoration:none}
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p class="tag" id="version">Round Here v5.4</p>
+        <p class="tag" id="version">Round Here v5.5</p>
       </div>
     </div>
 
@@ -778,7 +778,7 @@ function proxyError(res, j) {
 }
 
 // OpenRouteService (via the proxy): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
-let orsProfile = 'foot-hiking', orsGreenRejected = false, orsStraightRejected = false;
+let orsProfile = 'foot-hiking', orsGreenRejected = false, orsStraightRejected = false, orsNoAvoid = false;
 async function orsRoute(points, green, allowUturns) {
   if (orsGreenRejected) green = false;
   const body = {
@@ -787,7 +787,8 @@ async function orsRoute(points, green, allowUturns) {
     radiuses: points.map(() => -1)
   };
   if (!allowUturns && !orsStraightRejected && points.length > 2) body.continue_straight = true;
-  if (green) body.options = { profile_params: { weightings: { green: 1, quiet: 0.6 } } };
+  body.options = orsNoAvoid ? {} : { avoid_features: ['ferries'] };
+  if (green) body.options.profile_params = { weightings: { green: 1, quiet: 0.6 } };
   let res;
   try {
     res = await fetch(PROXY + '/route/' + orsProfile, { method: 'POST', headers: proxyHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body), signal: timeoutSignal(30000) });
@@ -805,7 +806,8 @@ async function orsRoute(points, green, allowUturns) {
       const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(msg); if (m) e.badIndex = +m[1]; throw e;
     }
     if (body.continue_straight && /continue_straight/i.test(msg)) { orsStraightRejected = true; return orsRoute(points, green, true); }
-    if (green && /options|weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false, allowUturns); }
+    if (green && /weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false, allowUturns); }
+    if (/avoid_features|options/i.test(msg) && body.options.avoid_features) { orsNoAvoid = true; return orsRoute(points, green, allowUturns); }
     if (res.status >= 500) throw Object.assign(new RouteError('key', 'The routing service is having trouble right now.'), { detail });
     throw new RouteError('http', 'Routing error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
   }
