@@ -82,6 +82,28 @@ button{font:inherit;color:inherit}
   background:var(--warn);color:#fff;border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);font-weight:600;display:flex;gap:10px;align-items:center}
 .banner svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .toast{position:absolute;z-index:800;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 160px);max-width:min(92vw,420px);background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;box-shadow:var(--shadow);text-align:center}
+.toast-btn{background:var(--bg);color:var(--fg);border:0;border-radius:8px;padding:5px 11px;font-weight:800;font-size:13px;margin-left:8px;cursor:pointer;vertical-align:middle}
+.banner{flex-wrap:wrap}
+.banner-btn{margin-left:auto;background:#fff;color:var(--warn);border:0;border-radius:10px;padding:9px 12px;font-weight:800;font-size:13px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.banner-btn:disabled{opacity:.7}
+/* End-of-walk card */
+.done-wrap{position:absolute;inset:0;z-index:950;background:rgba(10,20,12,.45);display:grid;place-items:center;padding:24px}
+.done{background:var(--panel);color:var(--fg);border-radius:22px;padding:26px 22px 22px;text-align:center;width:min(100%,340px);box-shadow:0 18px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:10px;align-items:center}
+.done-emoji{font-size:44px;line-height:1}
+.done h2{font-family:var(--display);font-size:26px;margin:0;letter-spacing:-.01em}
+.done-nums{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
+.done .btn{width:100%;margin-top:6px}
+/* Via pin and long-press menu */
+.via-pin{width:26px;height:26px;border-radius:50%;background:#fff;color:var(--accent);border:2.5px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.35);display:grid;place-items:center;font-size:14px;line-height:1;cursor:pointer}
+.via-pin.small{width:22px;height:22px;font-size:12px;box-shadow:none;cursor:default;flex:none}
+.via-row{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px;font-weight:600}
+.via-row .t{flex:1}
+.pick .leaflet-popup-content-wrapper{border-radius:14px;padding:4px;box-shadow:var(--shadow)}
+.pick .leaflet-popup-content{margin:0}
+.pick .leaflet-popup-tip-container{display:none}
+.pick-menu{display:flex;gap:4px}
+.pick-menu button{border:0;background:var(--panel-2);color:var(--fg);border-radius:10px;padding:10px 12px;font:700 14px var(--font,inherit);cursor:pointer;white-space:nowrap}
+.pick-menu button:first-child{background:var(--accent);color:var(--accent-fg)}
 
 /* Bottom sheet */
 .sheet{position:absolute;z-index:650;left:0;right:0;bottom:0;max-height:78%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--panel);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);
@@ -218,8 +240,18 @@ a.btn{text-decoration:none}
   <div class="banner" id="banner" hidden>
     <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
     <span id="bannerText">Off route</span>
+    <button class="banner-btn" id="btnReplan" hidden>Re-plan from here</button>
   </div>
   <div class="toast" id="toast" hidden role="status"></div>
+  <div class="done-wrap" id="doneWrap" hidden>
+    <div class="done" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
+      <div class="done-emoji">🎉</div>
+      <h2 id="doneTitle">Loop complete</h2>
+      <p class="done-nums" id="doneText">—</p>
+      <p class="hint">Nice one. You're back where you started.</p>
+      <button class="btn primary" id="doneClose">Close</button>
+    </div>
+  </div>
 
   <section class="sheet" id="sheet">
     <div class="grip"></div>
@@ -244,6 +276,7 @@ a.btn{text-decoration:none}
         <button data-km="3">3 km</button><button data-km="5">5 km</button><button data-km="8" class="on">8 km</button>
         <button data-km="12">12 km</button><button data-km="20">20 km</button>
       </div>
+      <div class="via-row" id="viaRow" hidden><span class="via-pin small">⚑</span><span class="t">The loop goes via your pin</span><button class="link" id="viaClear">Remove</button></div>
       <div class="row">
         <button class="btn primary" id="btnGo" disabled>Make me a loop</button>
       </div>
@@ -258,7 +291,7 @@ a.btn{text-decoration:none}
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p>Works without signal: the last loop you made, the map around it and its stop cards stay on your phone for a day and a half, or until you finish walking it. Making a new loop needs signal.</p>
-        <p class="tag" id="version">Round Here v5.7</p>
+        <p class="tag" id="version">Round Here v5.8</p>
       </div>
     </div>
 
@@ -642,20 +675,35 @@ function planTour(start, pois, targetM, maxStops, detour) {
 // Ring planner: find the direction with the most worthwhile places, lay a ring of the right circumference through them,
 // take the best stops near the ring and put plain ring points in any empty arc, then order everything round the ring.
 // Returns the waypoint sequence (stops and fillers) without the start.
-function planTourRing(start, pois, targetM, maxStops, rng) {
-  const L = targetM / 1.3, r = L / (2 * Math.PI);
-  let bestB = 0, bestS = -Infinity;
-  for (let b = 0; b < 360; b += 20) {
-    const centre = destination(start, b, r);
-    let sc = 0;
-    for (const c of pois) { const d = haversine(centre, c.p); if (d < 1.6 * r) sc += c.score * (1 - Math.abs(d - r) / (1.6 * r)); }
-    sc *= 0.8 + 0.4 * (rng ? rng() : 0.5);
-    if (sc > bestS) { bestS = sc; bestB = b; }
+// With `via` the ring has to pass through that place too, so only the two circles through start and via are candidates.
+function planTourRing(start, pois, targetM, maxStops, rng, via) {
+  const L = targetM / 1.3;
+  let r = L / (2 * Math.PI), centre;
+  if (via) {
+    const d = haversine(start, via); r = Math.max(r, d / 2 * 1.001);
+    const m = Math.sqrt(Math.max(0, r * r - d * d / 4)), mid = [(start[0] + via[0]) / 2, (start[1] + via[1]) / 2], dir = bearingBetween(start, via);
+    const cands = [destination(mid, dir + 90, m), destination(mid, dir - 90, m)];
+    let bestS = -Infinity;
+    for (const c of cands) {
+      let sc = 0;
+      for (const p of pois) { const dd = haversine(c, p.p); if (dd < 1.6 * r) sc += p.score * (1 - Math.abs(dd - r) / (1.6 * r)); }
+      sc *= 0.8 + 0.4 * (rng ? rng() : 0.5);
+      if (sc > bestS) { bestS = sc; centre = c; }
+    }
+  } else {
+    let bestB = 0, bestS = -Infinity;
+    for (let b = 0; b < 360; b += 20) {
+      const c = destination(start, b, r);
+      let sc = 0;
+      for (const p of pois) { const d = haversine(c, p.p); if (d < 1.6 * r) sc += p.score * (1 - Math.abs(d - r) / (1.6 * r)); }
+      sc *= 0.8 + 0.4 * (rng ? rng() : 0.5);
+      if (sc > bestS) { bestS = sc; bestB = b; }
+    }
+    centre = destination(start, bestB, r);
   }
-  const centre = destination(start, bestB, r);
   const ring = pois.filter(c => { const d = haversine(centre, c.p); return d > 0.25 * r && d < 1.6 * r; });
   // Greedy choice under the straight-line budget, scored by value per metre of detour from the ring.
-  const pts = [start, start], chosen = [], avail = ring.slice();
+  const pts = via ? [start, via, start] : [start, start], chosen = [], avail = ring.slice();
   while (chosen.length < maxStops && avail.length) {
     const curLen = loopLength(pts);
     let bi = -1, bv = -Infinity, bins = null;
@@ -673,6 +721,7 @@ function planTourRing(start, pois, targetM, maxStops, rng) {
   const ang = p => bearingBetween(centre, p);
   const a0 = ang(start), rel = a => ((ang(a) - a0) % 360 + 360) % 360;
   const entries = chosen.map(c => ({ p: c.p, poi: c, a: rel(c.p) }));
+  if (via) entries.push({ p: via, poi: null, via: true, a: rel(via) });
   // Fill arcs with nothing in them (the start covers the arc at 0).
   const K = 6;
   for (let k = 1; k < K; k++) {
@@ -681,7 +730,7 @@ function planTourRing(start, pois, targetM, maxStops, rng) {
   }
   const clockwise = rng ? rng() < 0.5 : true;
   entries.sort((x, y) => clockwise ? x.a - y.a : y.a - x.a);
-  return entries.map(e => ({ p: e.p, poi: e.poi }));
+  return entries.map(e => (e.via ? { p: e.p, poi: null, via: true } : { p: e.p, poi: e.poi }));
 }
 // Push the midpoint of the longest edge outwards so the loop gains roughly extraM. Returns {index, p}: insert p into seq at index.
 function stretchLoop(start, seqPts, extraM, avoid) {
@@ -762,6 +811,108 @@ function routeTiles(coords, layer, maxTiles) {
   }
   return urls.slice(0, maxTiles || 700);
 }
+// ---- Ovals through two points: loops via a chosen place, and open paths of a chosen length (re-planning) ----
+function localUnprojector(origin) {
+  const k = Math.cos(rad(origin[0])) * EARTH_R * Math.PI / 180, ky = EARTH_R * Math.PI / 180;
+  return q => [origin[0] + q[1] / ky, origin[1] + q[0] / k];
+}
+// Ramanujan's perimeter of an ellipse with semi-axes a and b.
+function ellipsePerimeter(a, b) { const h = Math.pow((a - b) / (a + b), 2); return Math.PI * (a + b) * (1 + 3 * h / (10 + Math.sqrt(4 - 3 * h))); }
+// Shortest sensible loop via a place d metres away: the thinnest oval allowed, times the usual roads-to-straight-line factor.
+function viaMinTarget(d) { return ellipsePerimeter(d / 2, Math.max(150, 0.06 * d)) * 1.25; }
+// Waypoints for a loop from start, through via, and back: an oval through both with roughly the given straight-line
+// perimeter (the circle through both when there is room for one, else an ellipse with the two at the ends of its long
+// axis), with K-2 extra points spread round it by arc share. side: which side of the start→via line the centre sits.
+// Returns { pts, viaIndex }, pts starting and ending at start; null when the two points coincide.
+function planViaWaypoints(start, via, perimeter, side, clockwise, K, jitter) {
+  const proj = localProjector(start), un = localUnprojector(start), q = proj(via), d = Math.hypot(q[0], q[1]);
+  if (d < 5) return null;
+  const ux = q[0] / d, uy = q[1] / d, vx = -uy * side, vy = ux * side, mid = [q[0] / 2, q[1] / 2];
+  let centre, A, B, tA, tB;
+  if (perimeter >= Math.PI * d) {
+    const r = perimeter / (2 * Math.PI), m = Math.sqrt(Math.max(0, r * r - d * d / 4));
+    centre = [mid[0] + vx * m, mid[1] + vy * m]; A = B = r;
+    tA = Math.atan2(-m, -d / 2); tB = Math.atan2(-m, d / 2);
+  } else {
+    centre = mid; A = d / 2;
+    let lo = 0, hi = A;
+    for (let i = 0; i < 40; i++) { const b = (lo + hi) / 2; if (ellipsePerimeter(A, b) < perimeter) lo = b; else hi = b; }
+    B = Math.max(hi, 150, 0.06 * d); tA = Math.PI; tB = 0;
+  }
+  const TAU = 2 * Math.PI, dir = clockwise ? -1 : 1;
+  const span = ((((tB - tA) * dir) % TAU) + TAU) % TAU;
+  const extra = Math.max(2, K - 2), n1 = Math.min(extra - 1, Math.max(1, Math.round(extra * span / TAU))), n2 = extra - n1;
+  const at = (t, j) => { const jr = j ? j.r : 1; if (j) t += rad(j.a); return un([centre[0] + (A * Math.cos(t) * ux + B * Math.sin(t) * vx) * jr, centre[1] + (A * Math.cos(t) * uy + B * Math.sin(t) * vy) * jr]); };
+  const pts = [start];
+  for (let i = 1; i <= n1; i++) pts.push(at(tA + dir * span * i / (n1 + 1), jitter && jitter[pts.length]));
+  pts.push(via); const viaIndex = pts.length - 1;
+  for (let i = 1; i <= n2; i++) pts.push(at(tB + dir * (TAU - span) * i / (n2 + 1), jitter && jitter[pts.length]));
+  pts.push(start);
+  return { pts, viaIndex };
+}
+// K points along an arc from a to b of roughly the given straight-line length, bulging to `side` of the a→b line:
+// half an ellipse with a and b at its ends when that is long enough, otherwise the long arc of a circle through both.
+function arcThrough(a, b, length, side, K) {
+  const proj = localProjector(a), un = localUnprojector(a), q = proj(b), d = Math.hypot(q[0], q[1]);
+  if (d < 5 || K < 1) return [];
+  const ux = q[0] / d, uy = q[1] / d, vx = -uy * side, vy = ux * side, mid = [q[0] / 2, q[1] / 2], out = [];
+  const place = (c, A, B, t) => un([c[0] + A * Math.cos(t) * ux + B * Math.sin(t) * vx, c[1] + A * Math.cos(t) * uy + B * Math.sin(t) * vy]);
+  if (2 * length <= Math.PI * d) {
+    const A = d / 2; let lo = 0, hi = A;
+    for (let i = 0; i < 40; i++) { const bb = (lo + hi) / 2; if (ellipsePerimeter(A, bb) / 2 < length) lo = bb; else hi = bb; }
+    const B = Math.max(hi, 60);
+    for (let i = 1; i <= K; i++) out.push(place(mid, A, B, Math.PI - Math.PI * i / (K + 1)));
+  } else {
+    // the circle through a and b whose long arc is `length`: r·(2π − 2·asin(d/2r)) = length, solved by bisection
+    let lo = d / 2, hi = 50 * d + length;
+    for (let i = 0; i < 60; i++) { const r = (lo + hi) / 2; if (r * (2 * Math.PI - 2 * Math.asin(Math.min(1, d / (2 * r)))) < length) lo = r; else hi = r; }
+    const r = hi, m = Math.sqrt(Math.max(0, r * r - d * d / 4)), c = [mid[0] + vx * m, mid[1] + vy * m];
+    const TAU = 2 * Math.PI, tA = Math.atan2(-m, -d / 2), tB = Math.atan2(-m, d / 2), major = TAU - ((((tB - tA) % TAU) + TAU) % TAU);
+    for (let i = 1; i <= K; i++) out.push(place(c, r, r, tA - major * i / (K + 1)));
+  }
+  return out;
+}
+// A polygon (GeoJSON, lon/lat) around the stretch of a route between two distances along it: the convex hull of points
+// `width` metres either side, used to tell the router to keep away from a part of the old route.
+function blockedPolygon(coords, cum, fromM, toM, width) {
+  width = width || 70;
+  const pts = []; for (let d = fromM; d < toM; d += 40) pts.push(pointAt(coords, cum, d)); pts.push(pointAt(coords, cum, toM));
+  if (pts.length < 2) return null;
+  const proj = localProjector(pts[0]), un = localUnprojector(pts[0]), xy = pts.map(proj), cloud = [];
+  for (let i = 0; i < xy.length; i++) {
+    const a = xy[Math.max(0, i - 1)], b = xy[Math.min(xy.length - 1, i + 1)]; let dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+    cloud.push([xy[i][0] - dy * width, xy[i][1] + dx * width], [xy[i][0] + dy * width, xy[i][1] - dx * width]);
+    if (i === 0) cloud.push([xy[i][0] - dx * width, xy[i][1] - dy * width]);
+    if (i === xy.length - 1) cloud.push([xy[i][0] + dx * width, xy[i][1] + dy * width]);
+  }
+  const hull = convexHull(cloud); if (hull.length < 3) return null;
+  return { type: 'Polygon', coordinates: [hull.concat([hull[0]]).map(q => { const p = un(q); return [+p[1].toFixed(6), +p[0].toFixed(6)]; })] };
+}
+function convexHull(points) {
+  const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = []; for (const p of pts) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); }
+  const upper = []; for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
+  upper.pop(); lower.pop(); return lower.concat(upper);
+}
+// Is the point inside a GeoJSON polygon's outer ring (lon/lat)?
+function insidePolygon(p, poly) {
+  if (!poly || !poly.coordinates) return false;
+  const ring = poly.coordinates[0], x = p[1], y = p[0]; let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// Share of a path's evenly spaced points that lie within tol metres of another path (how much of a new leg re-walks old ground).
+function retraceFraction(path, other, tol) {
+  if (path.length < 2 || other.length < 2) return 0;
+  const proj = localProjector(path[0]), xy = other.map(proj), cum = cumulative(path), pts = resample(path, cum, 25).pts;
+  let hit = 0;
+  for (const p of pts) if (nearestOnRoute(xy, proj(p), 0, xy.length - 1).dist <= (tol || 25)) hit++;
+  return hit / pts.length;
+}
 /*PURE-END*/
 
 // ---------- Network ----------
@@ -823,7 +974,8 @@ function proxyError(res, j) {
 
 // OpenRouteService (via the proxy): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
 let orsProfile = 'foot-hiking', orsGreenRejected = false, orsStraightRejected = false, orsNoAvoid = false;
-async function orsRoute(points, green, allowUturns) {
+// `avoid` is an optional GeoJSON polygon the route must keep out of (re-planning round a closed stretch).
+async function orsRoute(points, green, allowUturns, avoid) {
   if (orsGreenRejected) green = false;
   const body = {
     coordinates: points.map(p => [+p[1].toFixed(6), +p[0].toFixed(6)]),
@@ -832,6 +984,7 @@ async function orsRoute(points, green, allowUturns) {
   };
   if (!allowUturns && !orsStraightRejected && points.length > 2) body.continue_straight = true;
   body.options = orsNoAvoid ? {} : { avoid_features: ['ferries'] };
+  if (avoid) body.options.avoid_polygons = avoid;
   if (green) body.options.profile_params = { weightings: { green: 1, quiet: 0.6 } };
   let res;
   try {
@@ -842,16 +995,17 @@ async function orsRoute(points, green, allowUturns) {
   const detail = 'HTTP ' + res.status + (j && (j.message || (j.error && j.error.message)) ? ': ' + String(j.message || j.error.message).slice(0, 120) : '');
   if (res.status === 401 || res.status === 403) throw Object.assign(new RouteError('key', 'The routing service is unavailable right now.'), { detail });
   if (res.status === 429) throw Object.assign(new RouteError('key', 'The routing service is busy right now.'), { detail });
-  if (res.status === 404 && orsProfile === 'foot-hiking' && !(j && j.error && j.error.code)) { orsProfile = 'foot-walking'; return orsRoute(points, green, allowUturns); }
+  if (res.status === 404 && orsProfile === 'foot-hiking' && !(j && j.error && j.error.code)) { orsProfile = 'foot-walking'; return orsRoute(points, green, allowUturns, avoid); }
   if (!res.ok || !j) {
     const code = j && j.error && j.error.code, msg = (j && j.error && j.error.message) || (j && j.message) || '';
     if (code === 2009 || code === 2010) {
-      if (body.continue_straight && code === 2009) return orsRoute(points, green, true);
+      if (body.continue_straight && code === 2009) return orsRoute(points, green, true, avoid);
       const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(msg); if (m) e.badIndex = +m[1]; throw e;
     }
-    if (body.continue_straight && /continue_straight/i.test(msg)) { orsStraightRejected = true; return orsRoute(points, green, true); }
-    if (green && /weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false, allowUturns); }
-    if (/avoid_features|options/i.test(msg) && body.options.avoid_features) { orsNoAvoid = true; return orsRoute(points, green, allowUturns); }
+    if (body.continue_straight && /continue_straight/i.test(msg)) { orsStraightRejected = true; return orsRoute(points, green, true, avoid); }
+    if (avoid && /avoid_polygons|polygon/i.test(msg)) return orsRoute(points, green, allowUturns, null);
+    if (green && /weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false, allowUturns, avoid); }
+    if (/avoid_features|options/i.test(msg) && body.options.avoid_features) { orsNoAvoid = true; return orsRoute(points, green, allowUturns, avoid); }
     if (res.status >= 500) throw Object.assign(new RouteError('key', 'The routing service is having trouble right now.'), { detail });
     throw new RouteError('http', 'Routing error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
   }
@@ -1026,7 +1180,7 @@ async function placesCandidates(start, radius, theme, rng) {
 
 const THEME_LABEL = { walk: '', all: '', history: 'history', pubs: 'pub', green: 'green' };
 // Pick the best-read places within reach (by theme), thread a loop through them, fit the length.
-async function generateTour(start, targetM, seed, router, onProgress, theme) {
+async function generateTour(start, targetM, seed, router, onProgress, theme, via) {
   theme = theme || 'all';
   const rng = mulberry32(seed);
   onProgress && onProgress(1, 5, 'Finding ' + (theme === 'pubs' ? 'pubs…' : theme === 'green' ? 'green spaces…' : 'landmarks…'));
@@ -1061,9 +1215,12 @@ async function generateTour(start, targetM, seed, router, onProgress, theme) {
   } else if (placesRequired && !pois.length) throw osmRes.reason;
   if (!pois.length) throw noPoi();
   const maxStops = Math.min(10, Math.max(3, Math.round(targetM / 1000)));
-  let seq = planTourRing(start, pois, targetM, maxStops, rng);
+  let seq = planTourRing(start, pois, targetM, maxStops, rng, via);
   // Nothing near any ring (say one park well beyond it): fall back to reaching the best places directly; the fitter then forces a different way back.
-  if (!seq.some(e => e.poi)) seq = planTour(start, pois, targetM, maxStops).map(c => ({ p: c.p, poi: c }));
+  if (!seq.some(e => e.poi)) {
+    seq = planTour(start, pois, targetM, maxStops).map(c => ({ p: c.p, poi: c }));
+    if (via && seq.length) { const ins = insertionCost([start].concat(seq.map(e => e.p), [start]), via); seq.splice(ins.at - 1, 0, { p: via, poi: null, via: true }); }
+  }
   if (!seq.some(e => e.poi)) throw noPoi();
   const best = await fitTour(start, seq, targetM, router, onProgress, seed, pois);
   if (!best) throw noPoi();
@@ -1111,11 +1268,13 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
       seq = (bi != null && bi >= 1 && bi <= seq.length) ? seq.filter((_, k) => k !== bi - 1) : dropWeakest(seq, start);
       continue;
     }
-    const spurs = findSpurs(res.coords), awkward = new Set(), snip = [];
+    const via = seq.find(e => e.via);
+    const spurs = findSpurs(res.coords).filter(sp => !via || haversine(sp.tip, via.p) > 60), awkward = new Set(), snip = [];
     for (const sp of spurs) {
       if (sp.len <= 150) { snip.push(sp); continue; }
       const k = seq.findIndex(e => haversine(e.p, sp.tip) < 120);
       if (k < 0) { snip.push(sp); continue; }                                   // a long spur to nothing: cut it
+      if (seq[k].via) continue;                                                 // the chosen place is up a dead end: so be it
       if (!seq[k].poi) { avoid.push(seq[k].p); awkward.add(k); continue; }      // a filler on a dead end: lose it, remember the spot
       if (attempt < 4 && seq.filter(e => e.poi).length > 1) awkward.add(k);    // a stop behind a long dead end: lose it (a replacement is added if the loop comes up short)
       // otherwise it's the only stop: keep the spur and let the return-leg filler below turn it into a loop
@@ -1133,7 +1292,7 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool) {
     if (overlap > 0.25 && !seq.some(e => e.ret) && attempt < 4) { seq = seq.concat([{ p: returnFiller(start, res.coords, cum, targetM), poi: null, ret: true }]); continue; }
     if (err < 0.08) break;
     if (total > targetM * 1.08) {
-      if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi && !e.ret)) break;
+      if (seq.filter(e => e.poi).length <= 1 && !seq.some(e => !e.poi && !e.ret && !e.via)) break;
       seq = dropWeakest(seq, start);
     } else {
       const grown = growWithStop(start, seq, pool, used, targetM - total, maxStops);
@@ -1161,6 +1320,7 @@ async function swapStop(route, stopId, router, onProgress) {
   const skipped = (route.skipped || []).concat([stopId]);
   const used = new Set(remaining.map(s => s.id).concat(skipped));
   const seq = remaining.map(s => ({ p: [s.lat, s.lon], poi: pool.find(c => c.id === s.id) || slimPoi(Object.assign({ p: [s.lat, s.lon], score: 1 }, s)) }));
+  if (route.via) { const ins = insertionCost([start].concat(seq.map(e => e.p), [start]), route.via); seq.splice(ins.at - 1, 0, { p: route.via, poi: null, via: true }); }
   const pts = [start].concat(seq.map(e => e.p), [start]), budget = targetM / 1.3, curLen = loopLength(pts);
   let bestC = null, bestV = -Infinity, bestIns = null;
   for (const c of pool) {
@@ -1178,7 +1338,7 @@ async function swapStop(route, stopId, router, onProgress) {
   for (const s of best.stops) { const old = route.stops.find(o => o.id === s.id); if (old) { s.extract = old.extract; s.thumb = s.thumb || old.thumb; } }
   delete best.seq;
   const newOnes = best.stops.filter(s => !remaining.some(o => o.id === s.id));
-  Object.assign(best, { theme: route.theme, targetM, pool, skipped, kind: 'tour', mode: route.mode, startMode: route.startMode, createdAt: Date.now(), profile: null, ascent: null, descent: null, replaced: newOnes.length ? newOnes[0].title : null });
+  Object.assign(best, { theme: route.theme, targetM, pool, skipped, via: route.via || null, kind: 'tour', mode: route.mode, startMode: route.startMode, createdAt: Date.now(), profile: null, ascent: null, descent: null, replaced: newOnes.length ? newOnes[0].title : null });
   return best;
 }
 // A tour that goes out and straight back needs its return leg pushed sideways: a waypoint beside the midpoint, on whichever side is further from the existing line.
@@ -1193,9 +1353,9 @@ function returnFiller(start, coords, cum, targetM) {
 }
 // Remove a plain filler first (never the return-leg one); otherwise the stop whose straight-line detour is worst for its value.
 function dropWeakest(seq, start) {
-  const fillers = seq.filter(e => !e.poi && !e.ret);
+  const fillers = seq.filter(e => !e.poi && !e.ret && !e.via);
   if (fillers.length) { const i = seq.indexOf(fillers[fillers.length - 1]); return seq.filter((_, k) => k !== i); }
-  if (!seq.some(e => e.poi)) return seq.filter(e => !e.ret);
+  if (!seq.some(e => e.poi)) return seq.filter(e => !e.ret || e.via);
   const pts = [start].concat(seq.map(e => e.p), [start]);
   let wi = -1, wv = -Infinity;
   seq.forEach((e, i) => {
@@ -1209,30 +1369,35 @@ function dropWeakest(seq, start) {
 }
 
 // Grow or shrink a circle of waypoints until the routed loop lands near the target length.
-async function generateLoop(start, targetM, seed, onProgress, router) {
+// With `via`, the ring becomes an oval through the start and that place instead (planViaWaypoints), sized the same way.
+async function generateLoop(start, targetM, seed, onProgress, router, via) {
   router = router || osrmRoute;
   const rng = mulberry32(seed);
-  let bearingDeg = rng() * 360, clockwise = rng() < 0.5;
-  const K = targetM <= 5000 ? 4 : targetM <= 12000 ? 5 : 6;
+  let bearingDeg = rng() * 360, clockwise = rng() < 0.5, side = rng() < 0.5 ? 1 : -1;
+  const K = via ? 5 : targetM <= 5000 ? 4 : targetM <= 12000 ? 5 : 6;
+  const dVia = via ? haversine(start, via) : 0, perimMin = via ? ellipsePerimeter(dVia / 2, Math.max(150, 0.06 * dVia)) : 0;
   const MAX_CALLS = 7;
   let calls = 0, best = null;
   for (let pass = 0; pass < 2 && calls < MAX_CALLS; pass++) {
-    const jitter = Array.from({ length: K }, () => ({ r: 0.85 + 0.3 * rng(), a: (rng() - 0.5) * 24 }));
-    let r = targetM / (2 * Math.PI) * 0.8;
+    const jitter = Array.from({ length: K + 2 }, () => ({ r: 0.85 + 0.3 * rng(), a: (rng() - 0.5) * 24 }));
+    let r = targetM / (2 * Math.PI) * 0.8, perim = Math.max(perimMin, targetM / 1.3);
     for (let attempt = 0; attempt < 5 && calls < MAX_CALLS; attempt++) {
       calls++; onProgress && onProgress(calls, MAX_CALLS);
-      const wps = planWaypoints(start, r, bearingDeg, clockwise, K, jitter);
+      let wps, viaIndex = -1;
+      if (via) { const plan = planViaWaypoints(start, via, perim, side, clockwise, K, jitter); if (!plan) throw new RouteError('noroute', 'That place is where you are already.'); wps = plan.pts; viaIndex = plan.viaIndex; }
+      else wps = planWaypoints(start, r, bearingDeg, clockwise, K, jitter);
       let res;
       try { res = await router(wps); }
-      catch (e) { if (e.kind === 'noroute') { bearingDeg = (bearingDeg + 75) % 360; continue; } throw e; }
-      const spurs = findSpurs(res.coords);
+      catch (e) { if (e.kind === 'noroute') { bearingDeg = (bearingDeg + 75) % 360; side = -side; continue; } throw e; }
+      let spurs = findSpurs(res.coords);
       let nudged = false;
       for (const sp of spurs) {
         if (sp.len <= 150) continue;
-        const wi = wps.findIndex((p, i) => i > 0 && i < wps.length - 1 && haversine(p, sp.tip) < 150);
+        const wi = wps.findIndex((p, i) => i > 0 && i < wps.length - 1 && i !== viaIndex && haversine(p, sp.tip) < 150);
         if (wi > 0 && calls < MAX_CALLS) { jitter[wi].a += 40; jitter[wi].r = Math.max(0.6, jitter[wi].r - 0.15); nudged = true; }
       }
       if (nudged) continue;
+      if (via) spurs = spurs.filter(sp => haversine(sp.tip, via) > 60);   // a place up a dead end has to be reached and left the same way
       const snipped = removeSpurs(res.coords, res.eles || null, spurs); res.coords = snipped.coords; res.eles = snipped.eles;
       const cum = cumulative(res.coords), total = cum[cum.length - 1];
       if (total < 100) { bearingDeg = (bearingDeg + 75) % 360; continue; }
@@ -1244,11 +1409,67 @@ async function generateLoop(start, targetM, seed, onProgress, router) {
       else if (!best || (best.overlap > 0.25 && score < best.score)) best = cand;
       if (err < 0.05) break;
       r = Math.min(25000, Math.max(150, r * Math.pow(targetM / total, 0.9)));
+      perim = Math.max(perimMin, Math.min(80000, perim * Math.pow(targetM / total, 0.9)));
     }
     if (best && best.overlap < 0.3 && best.err < 0.15) break;
-    bearingDeg = (bearingDeg + 90 + rng() * 180) % 360; clockwise = !clockwise;
+    bearingDeg = (bearingDeg + 90 + rng() * 180) % 360; clockwise = !clockwise; side = -side;
   }
   if (!best) throw new RouteError('noroute', 'No walkable loop found from here. Try another distance, or shuffle.');
+  return best;
+}
+
+// A new way back (re-planning off route): from where you stand (P) to the start (H), about wantM long, bulging to `side`,
+// keeping the stops that still fit in the order they come, and asking the router to stay out of `avoid`.
+// router(points, avoid) → { coords, eles }. Returns { coords, eles, total, err, kept } or null when nothing routes.
+async function fitLeg(P, H, wantM, stops, side, router, avoid, onProgress) {
+  const direct = haversine(P, H);
+  wantM = Math.max(wantM, direct * 1.1 + 150);
+  const proj = localProjector(P), q = proj(H);
+  const along = s => { const a = proj([s.lat, s.lon]); return a[0] * q[0] + a[1] * q[1]; };
+  let seq = [];
+  for (const s of stops.slice().sort((a, b) => along(a) - along(b))) {
+    const trial = seq.concat([s]);
+    if (loopLength([P].concat(trial.map(x => [x.lat, x.lon]), [H])) <= wantM / 1.2) seq = trial;
+  }
+  const weakest = sq => {
+    const pts = [P].concat(sq.map(x => [x.lat, x.lon]), [H]); let wi = 0, wv = -Infinity;
+    sq.forEach((s, i) => { const v = haversine(pts[i], pts[i + 1]) + haversine(pts[i + 1], pts[i + 2]) - haversine(pts[i], pts[i + 2]); if (v > wv) { wv = v; wi = i; } });
+    return sq.filter((_, k) => k !== wi);
+  };
+  let arcLen = wantM / 1.25, best = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    onProgress && onProgress(attempt + 1, 4);
+    let wps;
+    if (seq.length) {
+      wps = [P].concat(seq.map(s => [s.lat, s.lon]), [H]);
+      const straight = loopLength(wps);
+      if (straight < arcLen * 0.8) {
+        // short even with the stops: push the middle of the longest edge out to the chosen side
+        let li = 0, ll = -1; for (let i = 0; i < wps.length - 1; i++) { const l = haversine(wps[i], wps[i + 1]); if (l > ll) { ll = l; li = i; } }
+        const a = wps[li], b = wps[li + 1], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], want = arcLen - straight;
+        const h = Math.min(1500, Math.max(150, Math.sqrt(want * (want + 2 * ll)) / 2));
+        wps.splice(li + 1, 0, destination(m, bearingBetween(a, b) - 90 * side, h));
+      }
+    } else wps = [P].concat(arcThrough(P, H, arcLen, side, 3), [H]);
+    let res;
+    try { res = await router(wps, avoid); }
+    catch (e) {
+      if (e.kind !== 'noroute') throw e;
+      if (avoid) { avoid = null; continue; }                 // the keep-out area may be blocking a waypoint: try without it
+      if (seq.length) { seq = seq.slice(0, -1); continue; }
+      return best;
+    }
+    const spurs = findSpurs(res.coords).filter(sp => sp.len <= 150 || !seq.some(s => haversine([s.lat, s.lon], sp.tip) < 120));
+    const snipped = removeSpurs(res.coords, res.eles || null, spurs);
+    const cum = cumulative(snipped.coords), total = cum[cum.length - 1];
+    if (total < 50) return best;
+    const err = Math.abs(total - wantM) / wantM;
+    const cand = { coords: snipped.coords, eles: snipped.eles, total, err, kept: seq.map(s => s.id) };
+    if (!best || err < best.err) best = cand;
+    if (err < 0.1) break;
+    if (total > wantM * 1.1 && seq.length) { seq = weakest(seq); continue; }
+    arcLen = Math.max(direct * 1.02, Math.min(wantM * 3, arcLen * Math.pow(wantM / total, 0.9)));
+  }
   return best;
 }
 
@@ -1263,7 +1484,8 @@ const store = {
 const $ = id => document.getElementById(id);
 const el = {
   brand: $('brandChip'), gpsChip: $('gpsChip'), gpsText: $('gpsText'), btnLocate: $('btnLocate'), btnLayer: $('btnLayer'), btnShare: $('btnShare'),
-  banner: $('banner'), bannerText: $('bannerText'), toast: $('toast'), sheet: $('sheet'),
+  banner: $('banner'), bannerText: $('bannerText'), btnReplan: $('btnReplan'), toast: $('toast'), sheet: $('sheet'),
+  viaRow: $('viaRow'), viaClear: $('viaClear'), doneWrap: $('doneWrap'), doneTitle: $('doneTitle'), doneText: $('doneText'), doneClose: $('doneClose'),
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
   distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
@@ -1275,6 +1497,14 @@ let toastTimer = null;
 function toast(msg, ms) {
   el.toast.textContent = msg; el.toast.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.toast.hidden = true; }, ms || 3500);
+}
+// A toast with one action button (Undo), shown a little longer.
+function toastAction(msg, label, fn, ms) {
+  el.toast.textContent = ''; el.toast.appendChild(document.createTextNode(msg));
+  const b = document.createElement('button'); b.className = 'toast-btn'; b.type = 'button'; b.textContent = label;
+  b.addEventListener('click', () => { el.toast.hidden = true; clearTimeout(toastTimer); fn(); });
+  el.toast.appendChild(b); el.toast.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.toast.hidden = true; }, ms || 12000);
 }
 function setSheetHeight() {
   document.documentElement.style.setProperty('--sheet-h', el.sheet.offsetHeight + 'px');
@@ -1377,7 +1607,7 @@ function updateMeMarker(p, acc, heading) {
 
 // ---------- State ----------
 const state = {
-  mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, route: null, busy: false,
+  mode: 'plan', targetKm: Math.min(30, Math.max(2, Number(store.get('distance', 8)) || 8)), start: null, via: null, route: null, busy: false,
   walk: null, watchId: null, following: true, lastFix: null, lastHeading: null,
   green: true,
   theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'walk')) >= 0 ? store.get('theme', 'walk') : 'walk'
@@ -1400,7 +1630,7 @@ elK.themes.addEventListener('click', e => {
 });
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
-  const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
+  const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else, or to go via a place.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
   const tour = { walk: ' A plain loop with no stops. Pick Sights, History, Pubs or Green for a tour with stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
   el.planHint.textContent = base + (tour[state.theme] || '');
 }
@@ -1469,11 +1699,56 @@ el.btnLocate.addEventListener('click', () => {
   if (state.mode === 'walk') { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); return; }
   locateOnce({ centre: true, force: true });
 });
+// Long-press: a two-choice menu at the spot — move the start there, or make the loop go via it.
+const pickPopup = L.popup({ closeButton: false, className: 'pick', autoPan: true, autoPanPadding: [20, 80], offset: [0, -6], maxWidth: 320 });
+function pickMenu(p, isVia) {
+  const html = '<div class="pick-menu">' + (isVia ? '<button type="button" data-act="unvia">Remove via</button>' : '<button type="button" data-act="via">Go via here</button>') + '<button type="button" data-act="start">Start here</button></div>';
+  pickPopup.setLatLng(p).setContent(html).openOn(map);
+  const box = pickPopup.getElement(); if (!box) return;
+  box.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation(); map.closePopup(pickPopup);
+    const act = b.dataset.act;
+    if (act === 'start') { setStart(p, 'manual'); toast('Start moved to the pin'); }
+    else if (act === 'via') { setVia(p); toast('The loop will go via your pin'); }
+    else if (act === 'unvia') { clearVia(); }
+  }));
+}
 map.on('contextmenu', e => {
   if (state.mode !== 'plan') return;
-  setStart([e.latlng.lat, e.latlng.lng], 'manual');
-  toast('Start moved to the pin');
+  pickMenu([e.latlng.lat, e.latlng.lng], false);
 });
+// Via pin: one place the loop must pass through. Kept with the route, so a saved loop remembers it; Remove clears it.
+let viaMarker = null;
+function viaIcon() { return L.divIcon({ className: '', html: '<div class="via-pin">⚑</div>', iconSize: [26, 26], iconAnchor: [13, 13] }); }
+function setVia(p) {
+  state.via = p;
+  if (viaMarker) viaMarker.remove();
+  viaMarker = L.marker(p, { icon: viaIcon(), keyboard: false, zIndexOffset: 550 }).addTo(map);
+  viaMarker.on('click', () => { if (state.mode === 'plan') pickMenu(p, true); });
+  el.viaRow.hidden = false; renderPlanHint();
+  requestAnimationFrame(setSheetHeight);
+}
+function clearVia() {
+  state.via = null;
+  if (viaMarker) { viaMarker.remove(); viaMarker = null; }
+  el.viaRow.hidden = true; renderPlanHint();
+  requestAnimationFrame(setSheetHeight);
+}
+// Is the asked-for distance enough for a loop via the pin? If not, say what would be, with a one-tap fix.
+function viaFits() {
+  if (!state.via || !state.start) return true;
+  const d = haversine(state.start.p, state.via), minM = viaMinTarget(d);
+  if (state.targetKm * 1000 >= minM * 0.98) return true;
+  const km = Math.min(30, Math.ceil(minM / 500) / 2);
+  el.planHint.innerHTML = '';
+  el.planHint.appendChild(document.createTextNode('Your pin is about ' + fmtKm(d) + ' km away as the crow flies; a loop via it needs at least ' + km.toFixed(1) + ' km. '));
+  const b = document.createElement('button'); b.className = 'link'; b.textContent = 'Set ' + km.toFixed(1) + ' km';
+  b.addEventListener('click', () => { setDistance(km); renderPlanHint(); });
+  el.planHint.appendChild(b);
+  requestAnimationFrame(setSheetHeight);
+  return false;
+}
+el.viaClear.addEventListener('click', () => { clearVia(); toast('Via removed'); });
 
 el.btnLayer.addEventListener('click', () => {
   map.removeLayer(layers[layerName]);
@@ -1487,6 +1762,7 @@ el.btnLayer.addEventListener('click', () => {
 async function makeLoop(seed) {
   if (!state.start || state.busy) return;
   if (navigator.onLine === false) { toast('No signal. Making a new loop needs internet; a saved loop still works.', 5000); return; }
+  if (state.via && !viaFits()) return;
   state.busy = true;
   const targetM = state.targetKm * 1000;
   const label = el.btnGo.innerHTML;
@@ -1500,7 +1776,7 @@ async function makeLoop(seed) {
     newJob();
     const routeWith = async router => {
       if (state.kind === 'tour') {
-        try { const r = await generateTour(start, targetM, seed, router, progress, state.theme); r.kind = 'tour'; return r; }
+        try { const r = await generateTour(start, targetM, seed, router, progress, state.theme, state.via); r.kind = 'tour'; return r; }
         catch (e) {
           if (e.kind === 'nopoi') toast(e.message, 6000);
           else if (e.kind === 'quiet') { /* no usable circuit with stops here: make a plain loop, say nothing */ }
@@ -1509,7 +1785,7 @@ async function makeLoop(seed) {
           else throw e;
         }
       }
-      const r = await generateLoop(start, targetM, seed, progress, router); r.kind = 'loop'; return r;
+      const r = await generateLoop(start, targetM, seed, progress, router, state.via); r.kind = 'loop'; return r;
     };
     let route;
     try { route = await routeWith(pts => orsRoute(pts, mode === 'green')); }
@@ -1524,6 +1800,7 @@ async function makeLoop(seed) {
       } else throw e;
     }
     route.startMode = state.start.mode; route.createdAt = Date.now(); route.profile = null; route.ascent = null; route.descent = null;
+    route.via = state.via || null; if (!route.targetM) route.targetM = targetM;
     route.mode = route.fallback ? 'osrm' : (mode === 'green' && orsGreenRejected ? 'ors' : mode);
     if (mode === 'green' && orsGreenRejected && !route.fallback) toast('The green preference was refused, so this loop is trail routing without it.', 7000);
     try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
@@ -1560,7 +1837,7 @@ function adoptRoute(route) {
   cacheForOffline(route);
 }
 function serializeRoute(r) {
-  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null };
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null, via: r.via || null, replanned: !!r.replanned };
 }
 // "Skip this stop" from the card: swap it for the next best candidate and re-route, keeping the other stops.
 async function skipStop(i) {
@@ -1689,7 +1966,7 @@ function renderRouteStats() {
   const r = state.route; if (!r) return;
   const th = r.theme && THEME_LABEL[r.theme] ? THEME_LABEL[r.theme] + ' ' : '';
   renderNudge();
-  el.routeEyebrow.textContent = r.stops && r.stops.length ? (r.shared ? 'Shared ' : 'Your ') + th + 'tour · ' + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : (r.shared ? 'Shared loop' : 'Your loop');
+  el.routeEyebrow.textContent = (r.stops && r.stops.length ? (r.shared ? 'Shared ' : 'Your ') + th + 'tour · ' + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : (r.shared ? 'Shared loop' : 'Your loop')) + (r.via && !r.shared ? ' · via your pin' : '') + (r.replanned ? ' · re-planned' : '');
   renderStopsList();
   el.stDist.textContent = fmtKm(r.total) + ' km';
   el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
@@ -1834,7 +2111,7 @@ function startWalk(resume) {
   const saved = resume ? store.get('walk', null) : null;
   state.walk = { proj, xy: r.coords.map(proj), progress: saved ? saved.progress : 0, lastIdx: 0, offCount: 0, onCount: 0, off: false, startedAt: saved ? saved.startedAt : Date.now(), finished: false };
   if (!resume && r.stops) { r.stops.forEach(s => { s.visited = false; }); drawStops(r); store.set('route', serializeRoute(r)); }
-  state.following = true; el.btnRecentre.hidden = true;
+  state.following = true; el.btnRecentre.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null;
   closeCard();
   unlockAudio(); keepAwake(true); compassRequest();
   showView('walk'); updateWalkUi(null); renderNextStop(state.walk.progress);
@@ -1851,7 +2128,7 @@ function startWalk(resume) {
 function stopWalk() {
   if (state.watchId != null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
   keepAwake(false); store.del('walk'); state.walk = null;
-  el.banner.hidden = true; closeCard();
+  el.banner.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; closeCard();
   if (doneLine && restLine && state.route) { doneLine.setLatLngs([]); restLine.setLatLngs(state.route.coords); }
   headingUp(false);
   showView('route'); renderRouteStats(); fitRoute(state.route);
@@ -1881,15 +2158,15 @@ function onFix(pos) {
   if (near.idx >= 0 && near.dist <= thr) {
     const prog = cum[near.idx] + near.t * (cum[near.idx + 1] - cum[near.idx]);
     if (prog >= w.progress - 150) { w.progress = Math.max(w.progress, prog); w.lastIdx = near.idx; }
-    w.onCount++; w.offCount = 0;
+    w.onCount++; w.offCount = 0; w.farCount = 0; w.farT0 = 0; el.btnReplan.hidden = true;
     if (w.off && w.onCount >= 2) { w.off = false; el.banner.hidden = true; buzz(80); }
-    if (!w.off) setStatus('ok', 'On route');
+    if (!w.off) setStatus('ok', w.finished ? (r.stops && r.stops.length ? 'Tour complete' : 'Loop complete') : 'On route');
     const cut = pointAt(r.coords, cum, w.progress);
     doneLine.setLatLngs(r.coords.slice(0, w.lastIdx + 1).concat([cut]));
     restLine.setLatLngs([cut].concat(r.coords.slice(w.lastIdx + 1)));
     if (!w.finished && w.progress > r.total * 0.85 && (r.total - w.progress < 60 || haversine(p, r.coords[0]) < 40) && haversine(p, r.coords[0]) < 60) {
-      w.finished = true; setStatus('ok', 'Loop complete'); buzz([150, 80, 150, 80, 300]); beep(3);
-      toast('Loop done: ' + fmtKm(r.total) + ' km in ' + fmtTime(Math.round((Date.now() - w.startedAt) / 60000)), 8000);
+      w.finished = true; setStatus('ok', r.stops && r.stops.length ? 'Tour complete' : 'Loop complete'); buzz([150, 80, 150, 80, 300]); beep(3);
+      showDone(r, w);
     }
   } else {
     w.offCount++; w.onCount = 0;
@@ -1897,6 +2174,10 @@ function onFix(pos) {
     setStatus('off', 'Off route · ' + d + ' m');
     if (!w.off && w.offCount >= 2) { w.off = true; el.banner.hidden = false; el.bannerText.textContent = 'Off route — ' + d + ' m from the line.'; buzz([250, 120, 250]); beep(2); }
     else if (w.off) el.bannerText.textContent = 'Off route — ' + d + ' m from the line.';
+    // A long way off, on a couple of decent fixes in a row: offer a new way back (never automatic).
+    const far = near.dist > Math.max(250, 4 * acc);
+    if (far) { w.farCount = (w.farCount || 0) + 1; if (!w.farT0) w.farT0 = Date.now(); } else { w.farCount = 0; w.farT0 = 0; }
+    el.btnReplan.hidden = !(w.off && far && w.farCount >= 2 && Date.now() - w.farT0 >= 5000 && !w.finished && !state.busy);
   }
   store.set('walk', { active: true, progress: w.progress, startedAt: w.startedAt });
   updateWalkUi(w.progress);
@@ -1916,6 +2197,99 @@ function updateWalkUi(progress) {
   const mins = estimateMinutes(left, ascLeft), elapsed = Math.round((Date.now() - w.startedAt) / 60000);
   el.wEta.textContent = '~' + fmtTime(mins) + ' left · ' + fmtTime(elapsed) + ' so far';
 }
+// End of the walk: one card, one tap to close; the finished loop stays on screen underneath.
+function showDone(r, w) {
+  const mins = Math.round((Date.now() - w.startedAt) / 60000), bits = [fmtKm(r.total) + ' km', fmtTime(mins)];
+  if (r.ascent != null) bits.push('↑ ' + r.ascent + ' m');
+  if (r.stops && r.stops.length) bits.push(r.stops.filter(s => s.visited).length + ' of ' + r.stops.length + ' stops');
+  el.doneTitle.textContent = r.stops && r.stops.length ? 'Tour complete' : 'Loop complete';
+  el.doneText.textContent = bits.join(' · ');
+  el.doneWrap.hidden = false;
+}
+el.doneClose.addEventListener('click', () => { el.doneWrap.hidden = true; });
+el.doneWrap.addEventListener('click', e => { if (e.target === el.doneWrap) el.doneWrap.hidden = true; });
+
+// ---------- Re-plan from here ----------
+// Off route by a long way (a closed park, say): on request, a new way back to the start from where you stand, about as
+// long as what you had left, keeping clear of the next stretch of the old route. Undo brings the old route back.
+let replanUndo = null;
+async function replanFromHere() {
+  const r = state.route, w = state.walk; if (!r || !w || state.busy || !state.lastFix) return;
+  if (navigator.onLine === false) { toast('No signal, so the route can\'t be re-planned yet. The old one stays.', 5000); return; }
+  const P = state.lastFix.p, H = r.coords[0];
+  const leaveM = w.progress, leavePt = pointAt(r.coords, r.cum, leaveM), target = r.targetM || r.total;
+  const want = Math.max(haversine(P, H) * 1.15 + 250, target - leaveM - haversine(leavePt, P));
+  // Keep-out area: the next stretch of the old route beyond where you left it (never right up to the start).
+  const from = leaveM + 60, to = Math.min(r.total - 200, leaveM + Math.max(400, Math.min(800, want * 0.2)));
+  let avoid = to > from + 80 ? blockedPolygon(r.coords, r.cum, from, to) : null;
+  if (avoid && (insidePolygon(P, avoid) || insidePolygon(H, avoid))) avoid = null;
+  // Which side to bulge: the one further from the stretch you turned away from and from the ground already walked.
+  const refs = resample(r.coords, r.cum, 60).pts.filter((p, i) => { const d = i * 60; return d <= leaveM || (d >= from && d <= to); });
+  const clearance = s => { const probe = arcThrough(P, H, want / 1.25, s, 5); return probe.length && refs.length ? Math.min.apply(null, probe.map(p => Math.min.apply(null, refs.map(q => haversine(p, q))))) : 0; };
+  const side = clearance(-1) > clearance(1) ? -1 : 1;
+  const pending = (r.stops || []).filter(s => !s.visited && !(avoid && insidePolygon([s.lat, s.lon], avoid)));
+  state.busy = true; newJob();
+  const btn = el.btnReplan, label = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Re-planning…';
+  const progress = (n, max) => { btn.innerHTML = '<span class="spinner"></span> Re-planning… ' + n + '/' + max; };
+  try {
+    const mode = routingMode();
+    let leg;
+    try { leg = await fitLeg(P, H, want, pending, side, (pts, av) => orsRoute(pts, mode === 'green', false, av), avoid, progress); }
+    catch (e) { if (e.kind === 'key' || e.kind === 'limit') leg = await fitLeg(P, H, want, pending, side, pts => osrmRoute(pts), null, progress); else throw e; }
+    if (!leg) throw new RouteError('noroute', 'No other way back from here that the paths allow.');
+    applyReplan(r, w, leaveM, P, leg);
+    toastAction('Re-planned: ' + fmtKm(Math.max(0, r.total - w.progress)) + ' km to go.', 'Undo', undoReplan);
+  } catch (e) {
+    toast(e.kind === 'network' || e.detail === 'unreachable' ? 'No signal, so the route can\'t be re-planned yet. The old one stays.' : (e.message || 'Could not re-plan from here.'), 6000);
+  } finally {
+    state.busy = false; btn.disabled = false; btn.textContent = label;
+  }
+}
+function applyReplan(r, w, leaveM, P, leg) {
+  replanUndo = { coords: r.coords, cum: r.cum, total: r.total, stops: r.stops ? r.stops.map(s => Object.assign({}, s)) : null, profile: r.profile, ascent: r.ascent, descent: r.descent, progress: w.progress, lastIdx: w.lastIdx };
+  // The old route up to where you left it, a straight join to where you stand, then the new leg.
+  let cut = 0; while (cut < r.cum.length - 1 && r.cum[cut + 1] <= leaveM) cut++;
+  const coords = r.coords.slice(0, cut + 1).concat([pointAt(r.coords, r.cum, leaveM), P], leg.coords);
+  r.coords = coords; r.cum = cumulative(coords); r.total = r.cum[r.cum.length - 1];
+  r.profile = null; r.ascent = null; r.descent = null; r.replanned = true; r.overlap = 0; r.err = 0;
+  if (r.stops) {
+    const keep = new Set(leg.kept);
+    r.stops = r.stops.filter(s => s.visited || keep.has(s.id));
+    const proj = localProjector(r.coords[0]), xy = r.coords.map(proj);
+    for (const s of r.stops) {
+      if (s.visited) continue;
+      const near = nearestOnRoute(xy, proj([s.lat, s.lon]), 0, xy.length - 1);
+      s.at = near.idx >= 0 ? r.cum[near.idx] + near.t * (r.cum[near.idx + 1] - r.cum[near.idx]) : null; s.gap = near.idx >= 0 ? Math.round(near.dist) : 0;
+    }
+    r.stops.sort((a, b) => (a.at || 0) - (b.at || 0));
+  }
+  const pIdx = cut + 2;
+  w.proj = localProjector(r.coords[0]); w.xy = r.coords.map(w.proj);
+  w.lastIdx = pIdx; w.progress = r.cum[pIdx];
+  w.off = false; w.offCount = 0; w.onCount = 0; w.farCount = 0; w.farT0 = 0;
+  el.banner.hidden = true; el.btnReplan.hidden = true; setStatus('ok', 'On route');
+  drawRoute(r); renderStopsList(); renderNextStop(w.progress); updateWalkUi(w.progress);
+  doneLine.setLatLngs(r.coords.slice(0, pIdx + 1)); restLine.setLatLngs(r.coords.slice(pIdx));
+  store.set('route', serializeRoute(r)); store.set('walk', { active: true, progress: w.progress, startedAt: w.startedAt });
+  loadElevation(r); cacheForOffline(r);
+  if (state.following) map.setView(P, map.getZoom(), { animate: false });
+}
+function undoReplan() {
+  const r = state.route, w = state.walk, u = replanUndo; if (!r || !u) return; replanUndo = null;
+  Object.assign(r, { coords: u.coords, cum: u.cum, total: u.total, stops: u.stops, profile: u.profile, ascent: u.ascent, descent: u.descent, replanned: false });
+  drawRoute(r); renderStopsList();
+  if (w) {
+    w.proj = localProjector(r.coords[0]); w.xy = r.coords.map(w.proj); w.progress = u.progress; w.lastIdx = u.lastIdx;
+    const c = pointAt(r.coords, r.cum, w.progress);
+    doneLine.setLatLngs(r.coords.slice(0, w.lastIdx + 1).concat([c])); restLine.setLatLngs([c].concat(r.coords.slice(w.lastIdx + 1)));
+    renderNextStop(w.progress); updateWalkUi(w.progress);
+    store.set('walk', { active: true, progress: w.progress, startedAt: w.startedAt });
+  }
+  store.set('route', serializeRoute(r));
+  toast('Back to the original route.');
+}
+el.btnReplan.addEventListener('click', replanFromHere);
+
 el.btnStart.addEventListener('click', () => startWalk(el.btnStart.dataset.resume === '1'));
 el.btnStop.addEventListener('click', stopWalk);
 el.btnRecentre.addEventListener('click', () => { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); applyHeading(true); });
@@ -2051,6 +2425,7 @@ setSheetHeight();
     state.route = savedRoute;
     drawRoute(savedRoute);
     setStart(savedRoute.coords[0], savedRoute.startMode || 'manual');
+    if (savedRoute.via && !savedRoute.shared) setVia(savedRoute.via);
     showView('route'); renderRouteStats(); fitRoute(savedRoute);
     if (!shared && savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; el.routeHint.textContent = 'You were mid-walk on this ' + (savedRoute.stops ? 'tour.' : 'loop.'); }
     else { el.btnStart.dataset.resume = '0'; }
