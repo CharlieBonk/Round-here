@@ -306,7 +306,7 @@ a.btn{text-decoration:none}
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p>Works without signal: the last loop you made, the map around it and its stop cards stay on your phone for a day and a half, or until you finish walking it. Making a new loop needs signal.</p>
-        <p class="tag" id="version">Round Here v5.9</p>
+        <p class="tag" id="version">Round Here v5.10</p>
       </div>
     </div>
 
@@ -1647,7 +1647,7 @@ elK.themes.addEventListener('click', e => {
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
   const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else, or to go via a place.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
-  const tour = { walk: ' A plain loop with no stops. Pick Sights, History, Pubs or Green for a tour with stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
+  const tour = { walk: ' A plain loop has no stops, or pick Sights, History, Pubs or Green for a tour with stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
   el.planHint.textContent = base + (tour[state.theme] || '');
 }
 
