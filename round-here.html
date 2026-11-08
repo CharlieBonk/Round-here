@@ -180,6 +180,13 @@ a.btn{text-decoration:none}
   background:conic-gradient(from -30deg, rgba(23,105,224,.35) 0deg 60deg, transparent 60deg 360deg);display:none}
 .me-cone.show{display:block}
 .me-dot{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:var(--me);border:3px solid #fff;box-shadow:0 0 0 2px rgba(23,105,224,.35),0 2px 6px rgba(0,0,0,.4)}
+/* Heading-up while walking: the map box becomes a square larger than the screen, centred on it, and is turned with CSS. */
+#map.walkmap{inset:auto;left:50%;top:50%;width:var(--rot-size,1200px);height:var(--rot-size,1200px);margin-left:calc(var(--rot-size,1200px) / -2);margin-top:calc(var(--rot-size,1200px) / -2);transform:rotate(var(--map-rot,0deg));transform-origin:50% 50%;transition:transform .3s linear;will-change:transform}
+#map.walkmap.snap,#map.walkmap.snap .stop-pin,#map.walkmap.snap .start-pin{transition:none}
+#map.walkmap .leaflet-control-container{display:none}
+#map.walkmap .stop-pin,#map.walkmap .start-pin{transform:rotate(calc(-1 * var(--map-rot,0deg)));transition:transform .3s linear}
+.credit{font-size:11px;color:var(--muted);text-align:right;margin:8px 0 0}
+.credit a{color:inherit}
 .leaflet-div-icon{background:transparent;border:0}
 
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -251,7 +258,7 @@ a.btn{text-decoration:none}
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p>Works without signal: the last loop you made, the map around it and its stop cards stay on your phone for a day and a half, or until you finish walking it. Making a new loop needs signal.</p>
-        <p class="tag" id="version">Round Here v5.6</p>
+        <p class="tag" id="version">Round Here v5.7</p>
       </div>
     </div>
 
@@ -297,6 +304,7 @@ a.btn{text-decoration:none}
         <div class="progress-txt" id="wEta">—</div>
         <button class="btn danger" id="btnStop">Stop</button>
       </div>
+      <p class="credit" id="walkCredit">Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</p>
     </div>
   </section>
 
@@ -737,10 +745,10 @@ function tileUrl(z, x, y, layer) {
   if (layer === 'topo') return 'https://' + 'abc'[Math.abs(x + y) % 3] + '.tile.opentopomap.org/' + z + '/' + x + '/' + y + '.png';
   return 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png';
 }
-// The squares along a route, plus one either side at the zooms used when following and zooming out, closest zoom first.
+// The squares along a route, plus a margin either side (two at the following zoom: the turned walk map shows more), closest zoom first.
 function routeTiles(coords, layer, maxTiles) {
   const urls = [], seen = new Set();
-  for (const [z, pad] of [[16, 1], [15, 1], [14, 1], [13, 0], [12, 0]]) {
+  for (const [z, pad] of [[16, 2], [15, 1], [14, 1], [13, 0], [12, 0]]) {
     const n = Math.pow(2, z), hit = new Set();
     for (const c of coords) { const t = tileXY(c[0], c[1], z); hit.add(t[0] + ',' + t[1]); }
     for (const k of hit) {
@@ -1260,7 +1268,7 @@ const el = {
   distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
   routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'),
-  statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop')
+  statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), walkCredit: $('walkCredit')
 };
 
 let toastTimer = null;
@@ -1828,8 +1836,9 @@ function startWalk(resume) {
   if (!resume && r.stops) { r.stops.forEach(s => { s.visited = false; }); drawStops(r); store.set('route', serializeRoute(r)); }
   state.following = true; el.btnRecentre.hidden = true;
   closeCard();
-  unlockAudio(); keepAwake(true);
+  unlockAudio(); keepAwake(true); compassRequest();
   showView('walk'); updateWalkUi(null); renderNextStop(state.walk.progress);
+  headingUp(true);
   store.set('walk', { active: true, progress: state.walk.progress, startedAt: state.walk.startedAt });
   setStatus('wait', 'Waiting for GPS');
   if (state.watchId != null) navigator.geolocation.clearWatch(state.watchId);
@@ -1844,6 +1853,7 @@ function stopWalk() {
   keepAwake(false); store.del('walk'); state.walk = null;
   el.banner.hidden = true; closeCard();
   if (doneLine && restLine && state.route) { doneLine.setLatLngs([]); restLine.setLatLngs(state.route.coords); }
+  headingUp(false);
   showView('route'); renderRouteStats(); fitRoute(state.route);
   el.btnStart.textContent = 'Start walking'; el.btnStart.dataset.resume = '0';
 }
@@ -1856,8 +1866,8 @@ function onFix(pos) {
   setGps('gps-ok', 'GPS ±' + acc + ' m');
   const speed = pos.coords.speed, hd = pos.coords.heading;
   if (hd != null && !isNaN(hd) && (speed == null || speed > 0.4)) state.lastHeading = hd;
-  updateMeMarker(p, acc, state.lastHeading);
-  if (state.following) { map.setView(p, w.zoomSet ? map.getZoom() : 16, { animate: false }); w.zoomSet = true; }
+  updateMeMarker(p, acc, currentHeading());
+  if (state.following) { map.setView(p, w.zoomSet ? map.getZoom() : 16, { animate: false }); w.zoomSet = true; applyHeading(true); }
 
   // Project onto the route: look near the expected position first so the start/finish overlap doesn't confuse progress.
   const xy = w.xy, q = w.proj(p);
@@ -1885,8 +1895,8 @@ function onFix(pos) {
     w.offCount++; w.onCount = 0;
     const d = Math.round(near.dist);
     setStatus('off', 'Off route · ' + d + ' m');
-    if (!w.off && w.offCount >= 2) { w.off = true; el.banner.hidden = false; el.bannerText.textContent = 'Off route — ' + d + ' m from the line. Head back towards it.'; buzz([250, 120, 250]); beep(2); }
-    else if (w.off) el.bannerText.textContent = 'Off route — ' + d + ' m from the line. Head back towards it.';
+    if (!w.off && w.offCount >= 2) { w.off = true; el.banner.hidden = false; el.bannerText.textContent = 'Off route — ' + d + ' m from the line.'; buzz([250, 120, 250]); beep(2); }
+    else if (w.off) el.bannerText.textContent = 'Off route — ' + d + ' m from the line.';
   }
   store.set('walk', { active: true, progress: w.progress, startedAt: w.startedAt });
   updateWalkUi(w.progress);
@@ -1908,8 +1918,93 @@ function updateWalkUi(progress) {
 }
 el.btnStart.addEventListener('click', () => startWalk(el.btnStart.dataset.resume === '1'));
 el.btnStop.addEventListener('click', stopWalk);
-el.btnRecentre.addEventListener('click', () => { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); });
+el.btnRecentre.addEventListener('click', () => { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); applyHeading(true); });
 map.on('dragstart', () => { if (state.mode === 'walk') { state.following = false; el.btnRecentre.hidden = false; } });
+
+// ---------- Heading-up (walk mode) ----------
+// While following a walk the map is turned so the way you face is up. Leaflet only knows north-up, so the map's box is
+// made a square larger than the screen, centred on it, and turned with CSS. Leaflet's finger-to-map maths is corrected
+// for the turn below, so taps and pinches land where they should; a drag snaps back to north (and stops following, as
+// before), and Re-centre turns it again. Direction comes from the compass where the phone allows it (works standing
+// still), otherwise from GPS while moving.
+const mapEl = $('map');
+// Leaflet measures fingers against the map box's screen rectangle, which is the wrong shape once the box is turned.
+// Undo the turn around the centre so the point lands in the map's own (unturned) frame.
+const mouseEventToContainerPoint0 = map.mouseEventToContainerPoint.bind(map);
+map.mouseEventToContainerPoint = function (e) {
+  if (!rot.on || rot.css === 0) return mouseEventToContainerPoint0(e);
+  const r = mapEl.getBoundingClientRect(), a = -rot.css * Math.PI / 180;
+  const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+  return L.point(mapEl.clientWidth / 2 + dx * Math.cos(a) - dy * Math.sin(a), mapEl.clientHeight / 2 + dx * Math.sin(a) + dy * Math.cos(a));
+};
+const rot = { on: false, css: 0, compass: null, compassAt: 0, touches: 0, lastApply: 0, coneAt: 0, listening: false };
+function compassRequest() {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission().then(r => { if (r === 'granted') compassListen(); }).catch(() => {});
+    } else compassListen();
+  } catch (e) {}
+}
+function compassListen() {
+  if (rot.listening || typeof window === 'undefined') return; rot.listening = true;
+  const onOri = e => {
+    let h = null;
+    if (e.webkitCompassHeading != null && !isNaN(e.webkitCompassHeading)) { if (e.webkitCompassAccuracy != null && e.webkitCompassAccuracy < 0) return; h = e.webkitCompassHeading; }
+    else if (e.absolute === true && e.alpha != null) h = (360 - e.alpha) % 360;
+    if (h == null) return;
+    const ang = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : 0;
+    rot.compass = (h + ang + 360) % 360; rot.compassAt = Date.now();
+    if (state.mode === 'walk') {
+      applyHeading(false);
+      if (state.lastFix && rot.compassAt - rot.coneAt > 250) { rot.coneAt = rot.compassAt; updateMeMarker(state.lastFix.p, state.lastFix.acc, rot.compass); }
+    }
+  };
+  // iPhone reports the compass on the plain event; Android on the "absolute" one (its plain event is relative and is ignored above).
+  window.addEventListener('deviceorientationabsolute', onOri);
+  window.addEventListener('deviceorientation', onOri);
+}
+// Compass if it spoke in the last few seconds, else the GPS direction of travel from a recent fix.
+function currentHeading() {
+  const now = Date.now();
+  if (rot.compass != null && now - rot.compassAt < 3000) return rot.compass;
+  if (state.lastHeading != null && state.lastFix && now - state.lastFix.t < 20000) return state.lastHeading;
+  return null;
+}
+function rotSize() { return Math.ceil(Math.sqrt(window.innerWidth * window.innerWidth + window.innerHeight * window.innerHeight)) + 40; }
+function headingUp(on) {
+  if (rot.on === on) return; rot.on = on;
+  mapEl.style.setProperty('--rot-size', rotSize() + 'px');
+  snapNorth();
+  mapEl.classList.toggle('walkmap', on);
+  if (el.walkCredit) el.walkCredit.innerHTML = layerName === 'topo' ? 'Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, SRTM · © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a>' : 'Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  map.invalidateSize({ animate: false });
+  if (on && state.lastFix) map.setView(state.lastFix.p, map.getZoom(), { animate: false });
+}
+function snapNorth() {
+  mapEl.classList.add('snap'); rot.css = 0; mapEl.style.setProperty('--map-rot', '0deg');
+  void mapEl.offsetWidth; // apply now, before anyone measures the map
+  requestAnimationFrame(() => mapEl.classList.remove('snap'));
+}
+function applyHeading(force) {
+  if (!rot.on || !state.following || rot.touches > 0 || state.mode !== 'walk') return;
+  const h = currentHeading(); if (h == null) return;
+  const now = Date.now(); if (!force && now - rot.lastApply < 200) return; rot.lastApply = now;
+  // Turn the short way round, keeping the CSS angle continuous so the transition never spins the long way.
+  const d = (((-h - rot.css) % 360) + 540) % 360 - 180;
+  if (Math.abs(d) < 1.5) return;
+  rot.css += d;
+  mapEl.style.setProperty('--map-rot', rot.css.toFixed(1) + 'deg');
+}
+// No turning while fingers are on the map (a pinch should not have the map spin under it); catch up when they lift.
+const touchUpdate = e => {
+  rot.touches = e.touches ? e.touches.length : (e.type === 'mousedown' ? 1 : 0);
+  if (rot.on && rot.touches === 0) applyHeading(true);
+};
+['touchstart', 'touchend', 'touchcancel'].forEach(t => mapEl.addEventListener(t, touchUpdate, { capture: true, passive: true }));
+if (!('ontouchstart' in window)) { mapEl.addEventListener('mousedown', touchUpdate, { capture: true }); window.addEventListener('mouseup', touchUpdate, { capture: true }); }
+// A drag moves the map along the screen's axes, so it has to be north-up to feel right: snap, and following has already stopped.
+map.on('dragstart', () => { if (rot.on && rot.css !== 0) snapNorth(); });
+window.addEventListener('resize', () => { if (rot.on) { mapEl.style.setProperty('--rot-size', rotSize() + 'px'); map.invalidateSize({ animate: false }); if (state.following && state.lastFix) map.setView(state.lastFix.p, map.getZoom(), { animate: false }); } });
 
 // ---------- Offline ----------
 // The service worker is registered at the top of this script. The route and its card text are already in localStorage,
