@@ -63,6 +63,8 @@ button{font:inherit;color:inherit}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel);color:var(--fg);border-radius:999px;padding:7px 12px;box-shadow:var(--shadow);font-size:13px;font-weight:600;white-space:nowrap;border:1px solid var(--line)}
 .brand{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.01em}
 .brand::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--route);display:inline-block;margin-right:7px;box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--route)}
+.brand.off{color:var(--muted)}
+.brand.off::before{background:var(--muted);box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--muted)}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
 .chip.gps-ok .dot{background:var(--ok)}
 .chip.gps-wait .dot{background:#E0A020;animation:pulse 1.2s infinite}
@@ -190,7 +192,7 @@ a.btn{text-decoration:none}
   <div id="map" role="application" aria-label="Map"></div>
 
   <div class="topbar">
-    <div class="chip brand">Round Here</div>
+    <div class="chip brand" id="brandChip">Round Here</div>
     <div class="chip gps-wait" id="gpsChip"><span class="dot"></span><span id="gpsText">Locating…</span></div>
   </div>
 
@@ -248,7 +250,8 @@ a.btn{text-decoration:none}
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p class="tag" id="version">Round Here v5.5</p>
+        <p>Works without signal: the last loop you made, the map around it and its stop cards stay on your phone for a day and a half, or until you finish walking it. Making a new loop needs signal.</p>
+        <p class="tag" id="version">Round Here v5.6</p>
       </div>
     </div>
 
@@ -327,6 +330,11 @@ a.btn{text-decoration:none}
 <script>
 (() => {
 'use strict';
+// Offline support: a service worker (sw.js, next to this file) keeps the app, the map around the current loop and the
+// stop photos on the phone. Registered first so it is in place even if something later on this page fails to load.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
+}
 /*PURE-START*/
 const EARTH_R = 6371008.8;
 const rad = d => d * Math.PI / 180;
@@ -717,6 +725,34 @@ function buildGpx(name, coords, cum, profile, stops) {
   }
   lines.push('</trkseg></trk></gpx>');
   return lines.join('\n');
+}
+// Map tiles: which square of the world map a point falls in at a zoom level, and the squares a route passes through.
+function tileXY(lat, lon, z) {
+  const n = Math.pow(2, z), la = lat * Math.PI / 180;
+  const x = Math.floor((lon + 180) / 360 * n);
+  const y = Math.floor((1 - Math.log(Math.tan(la) + 1 / Math.cos(la)) / Math.PI) / 2 * n);
+  return [((x % n) + n) % n, Math.min(n - 1, Math.max(0, y))];
+}
+function tileUrl(z, x, y, layer) {
+  if (layer === 'topo') return 'https://' + 'abc'[Math.abs(x + y) % 3] + '.tile.opentopomap.org/' + z + '/' + x + '/' + y + '.png';
+  return 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png';
+}
+// The squares along a route, plus one either side at the zooms used when following and zooming out, closest zoom first.
+function routeTiles(coords, layer, maxTiles) {
+  const urls = [], seen = new Set();
+  for (const [z, pad] of [[16, 1], [15, 1], [14, 1], [13, 0], [12, 0]]) {
+    const n = Math.pow(2, z), hit = new Set();
+    for (const c of coords) { const t = tileXY(c[0], c[1], z); hit.add(t[0] + ',' + t[1]); }
+    for (const k of hit) {
+      const [x, y] = k.split(',').map(Number);
+      for (let dx = -pad; dx <= pad; dx++) for (let dy = -pad; dy <= pad; dy++) {
+        const yy = y + dy; if (yy < 0 || yy >= n) continue;
+        const xx = ((x + dx) % n + n) % n, key = z + '/' + xx + '/' + yy;
+        if (seen.has(key)) continue; seen.add(key); urls.push(tileUrl(z, xx, yy, layer));
+      }
+    }
+  }
+  return urls.slice(0, maxTiles || 700);
 }
 /*PURE-END*/
 
@@ -1218,7 +1254,7 @@ const store = {
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
 const el = {
-  gpsChip: $('gpsChip'), gpsText: $('gpsText'), btnLocate: $('btnLocate'), btnLayer: $('btnLayer'), btnShare: $('btnShare'),
+  brand: $('brandChip'), gpsChip: $('gpsChip'), gpsText: $('gpsText'), btnLocate: $('btnLocate'), btnLayer: $('btnLayer'), btnShare: $('btnShare'),
   banner: $('banner'), bannerText: $('bannerText'), toast: $('toast'), sheet: $('sheet'),
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
   distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
@@ -1436,11 +1472,13 @@ el.btnLayer.addEventListener('click', () => {
   layerName = layerName === 'osm' ? 'topo' : 'osm';
   layers[layerName].addTo(map); store.set('layer', layerName);
   toast(layerName === 'topo' ? 'Topographic map' : 'Street map');
+  if (state.route) cacheForOffline(state.route);
 });
 
 // ---------- Generate ----------
 async function makeLoop(seed) {
   if (!state.start || state.busy) return;
+  if (navigator.onLine === false) { toast('No signal. Making a new loop needs internet; a saved loop still works.', 5000); return; }
   state.busy = true;
   const targetM = state.targetKm * 1000;
   const label = el.btnGo.innerHTML;
@@ -1511,6 +1549,7 @@ function adoptRoute(route) {
   store.set('route', serializeRoute(route));
   if (!route.profile) loadElevation(route);
   if (route.stops && route.stops.some(s => s.extract == null)) loadExtracts(route);
+  cacheForOffline(route);
 }
 function serializeRoute(r) {
   return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null };
@@ -1571,7 +1610,7 @@ async function loadThumbs(route) {
     const det = await wikiDetails(lang, groups[lang]);
     stops.forEach(s => { if (!s.thumb && s.lang === lang && det[s.pageid]) s.thumb = det[s.pageid].thumb || null; });
   }));
-  if (state.route === route) { store.set('route', serializeRoute(route)); if (cardIdx >= 0 && !elC.card.hidden) openCard(cardIdx); }
+  if (state.route === route) { store.set('route', serializeRoute(route)); if (cardIdx >= 0 && !elC.card.hidden) openCard(cardIdx); cacheForOffline(route); }
 }
 
 // ---------- Share ----------
@@ -1872,6 +1911,30 @@ el.btnStop.addEventListener('click', stopWalk);
 el.btnRecentre.addEventListener('click', () => { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); });
 map.on('dragstart', () => { if (state.mode === 'walk') { state.following = false; el.btnRecentre.hidden = false; } });
 
+// ---------- Offline ----------
+// The service worker is registered at the top of this script. The route and its card text are already in localStorage,
+// so a loop made with signal opens and follows without it; what is asked for here is the map around it and the photos.
+let offlineTimer = null;
+function cacheForOffline(route) {
+  if (!route || !route.coords || !route.coords.length) return;
+  clearTimeout(offlineTimer);
+  // A few seconds' pause so a run of shuffles only saves the loop that was kept.
+  offlineTimer = setTimeout(() => {
+    if (state.route !== route || navigator.onLine === false || !('serviceWorker' in navigator)) return;
+    const urls = routeTiles(route.coords, layerName);
+    (route.stops || []).forEach(s => { if (s.thumb) urls.push(s.thumb); });
+    navigator.serviceWorker.ready.then(reg => { const w = navigator.serviceWorker.controller || reg.active; if (w) w.postMessage({ type: 'prefetch', urls }); }).catch(() => {});
+  }, 4000);
+}
+function renderOnline() {
+  const off = navigator.onLine === false;
+  el.brand.textContent = off ? 'Round Here · offline' : 'Round Here';
+  el.brand.classList.toggle('off', off);
+}
+window.addEventListener('online', renderOnline);
+window.addEventListener('offline', () => { renderOnline(); toast('No signal. Your saved loop, map and cards still work; a new loop needs signal.', 5000); });
+renderOnline();
+
 // ---------- Boot ----------
 window.addEventListener('resize', () => { setSheetHeight(); if (state.mode === 'route') renderProfile(null); });
 window.addEventListener('orientationchange', () => setTimeout(() => map.invalidateSize(), 300));
@@ -1880,8 +1943,8 @@ setSheetHeight();
 (async () => {
   let savedRoute = reviveRoute(store.get('route', null));
   const savedWalk = store.get('walk', null);
-  // A loop from a previous day is stale unless a walk on it is still in progress.
-  if (savedRoute && !(savedWalk && savedWalk.active) && Date.now() - (savedRoute.createdAt || 0) > 12 * 3600 * 1000) { store.del('route'); savedRoute = null; }
+  // A loop goes stale after a day and a half (long enough to plan the night before) unless a walk on it is still in progress.
+  if (savedRoute && !(savedWalk && savedWalk.active) && Date.now() - (savedRoute.createdAt || 0) > 36 * 3600 * 1000) { store.del('route'); savedRoute = null; }
   // A link someone sent takes priority over whatever was here before.
   let shared = null;
   if (/[#&]r=/.test(location.hash)) {
@@ -1899,6 +1962,7 @@ setSheetHeight();
     if (!savedRoute.profile) loadElevation(savedRoute);
     if (savedRoute.stops && savedRoute.stops.some(s => s.extract === null)) loadExtracts(savedRoute);
     if (savedRoute.stops && savedRoute.stops.some(s => !s.thumb && s.pageid)) loadThumbs(savedRoute);
+    cacheForOffline(savedRoute);
   } else {
     showView('plan');
   }
