@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-title" content="Round Here">
 <meta name="theme-color" content="#1E5B3C">
 <title>Round Here</title>
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap">
@@ -87,12 +90,15 @@ button{font:inherit;color:inherit}
 .banner-btn{margin-left:auto;background:#fff;color:var(--warn);border:0;border-radius:10px;padding:9px 12px;font-weight:800;font-size:13px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .banner-btn:disabled{opacity:.7}
 /* End-of-walk card */
-.done-wrap{position:absolute;inset:0;z-index:950;background:rgba(10,20,12,.45);display:grid;place-items:center;padding:24px}
+.done-wrap{position:absolute;inset:0;z-index:1200;background:rgba(10,20,12,.45);display:grid;place-items:center;padding:24px}
 .done{background:var(--panel);color:var(--fg);border-radius:22px;padding:26px 22px 22px;text-align:center;width:min(100%,340px);box-shadow:0 18px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:10px;align-items:center}
 .done-emoji{font-size:44px;line-height:1}
 .done h2{font-family:var(--display);font-size:26px;margin:0;letter-spacing:-.01em}
 .done-nums{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
 .done .btn{width:100%;margin-top:6px}
+.done .btn.secondary{margin-top:0}
+.done-emoji.flag{color:var(--accent);font-size:40px}
+#viaText{font-weight:600;color:var(--muted);line-height:1.4}
 /* Via pin and long-press menu */
 .via-pin{width:26px;height:26px;border-radius:50%;background:#fff;color:var(--accent);border:2.5px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.35);display:grid;place-items:center;font-size:14px;line-height:1;cursor:pointer}
 .via-pin.small{width:22px;height:22px;font-size:12px;box-shadow:none;cursor:default;flex:none}
@@ -252,6 +258,15 @@ a.btn{text-decoration:none}
       <button class="btn primary" id="doneClose">Close</button>
     </div>
   </div>
+  <div class="done-wrap" id="viaWrap" hidden>
+    <div class="done" role="dialog" aria-modal="true" aria-labelledby="viaTitle">
+      <div class="done-emoji flag">⚑</div>
+      <h2 id="viaTitle">Pin too far</h2>
+      <p class="done-nums" id="viaText">—</p>
+      <button class="btn primary" id="viaSet">Set 6.0 km</button>
+      <button class="btn secondary" id="viaDrop">Remove the pin</button>
+    </div>
+  </div>
 
   <section class="sheet" id="sheet">
     <div class="grip"></div>
@@ -291,7 +306,7 @@ a.btn{text-decoration:none}
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
         <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
         <p>Works without signal: the last loop you made, the map around it and its stop cards stay on your phone for a day and a half, or until you finish walking it. Making a new loop needs signal.</p>
-        <p class="tag" id="version">Round Here v5.8</p>
+        <p class="tag" id="version">Round Here v5.9</p>
       </div>
     </div>
 
@@ -1486,6 +1501,7 @@ const el = {
   brand: $('brandChip'), gpsChip: $('gpsChip'), gpsText: $('gpsText'), btnLocate: $('btnLocate'), btnLayer: $('btnLayer'), btnShare: $('btnShare'),
   banner: $('banner'), bannerText: $('bannerText'), btnReplan: $('btnReplan'), toast: $('toast'), sheet: $('sheet'),
   viaRow: $('viaRow'), viaClear: $('viaClear'), doneWrap: $('doneWrap'), doneTitle: $('doneTitle'), doneText: $('doneText'), doneClose: $('doneClose'),
+  viaWrap: $('viaWrap'), viaTitle: $('viaTitle'), viaText: $('viaText'), viaSet: $('viaSet'), viaDrop: $('viaDrop'),
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
   distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
@@ -1734,20 +1750,22 @@ function clearVia() {
   el.viaRow.hidden = true; renderPlanHint();
   requestAnimationFrame(setSheetHeight);
 }
-// Is the asked-for distance enough for a loop via the pin? If not, say what would be, with a one-tap fix.
+// Is the asked-for distance enough for a loop via the pin? If not, a card over the map says what would be, with a one-tap fix.
+let viaSuggestKm = 0;
 function viaFits() {
   if (!state.via || !state.start) return true;
   const d = haversine(state.start.p, state.via), minM = viaMinTarget(d);
   if (state.targetKm * 1000 >= minM * 0.98) return true;
-  const km = Math.min(30, Math.ceil(minM / 500) / 2);
-  el.planHint.innerHTML = '';
-  el.planHint.appendChild(document.createTextNode('Your pin is about ' + fmtKm(d) + ' km away as the crow flies; a loop via it needs at least ' + km.toFixed(1) + ' km. '));
-  const b = document.createElement('button'); b.className = 'link'; b.textContent = 'Set ' + km.toFixed(1) + ' km';
-  b.addEventListener('click', () => { setDistance(km); renderPlanHint(); });
-  el.planHint.appendChild(b);
-  requestAnimationFrame(setSheetHeight);
+  viaSuggestKm = Math.min(30, Math.ceil(minM / 500) / 2);
+  el.viaTitle.textContent = 'Pin too far for ' + state.targetKm.toFixed(1) + ' km';
+  el.viaText.textContent = 'Your pin is about ' + fmtKm(d) + ' km away as the crow flies. A loop that goes via it and back needs at least ' + viaSuggestKm.toFixed(1) + ' km.';
+  el.viaSet.textContent = 'Set ' + viaSuggestKm.toFixed(1) + ' km';
+  el.viaWrap.hidden = false;
   return false;
 }
+el.viaSet.addEventListener('click', () => { el.viaWrap.hidden = true; setDistance(viaSuggestKm); toast('Distance set to ' + viaSuggestKm.toFixed(1) + ' km. Make the loop when you\'re ready.'); });
+el.viaDrop.addEventListener('click', () => { el.viaWrap.hidden = true; clearVia(); toast('Pin removed'); });
+el.viaWrap.addEventListener('click', e => { if (e.target === el.viaWrap) el.viaWrap.hidden = true; });
 el.viaClear.addEventListener('click', () => { clearVia(); toast('Via removed'); });
 
 el.btnLayer.addEventListener('click', () => {
