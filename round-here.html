@@ -118,11 +118,12 @@ button{font:inherit;color:inherit}
 .grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 8px}
 .view{display:flex;flex-direction:column;gap:12px}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.big{font-family:var(--display);font-weight:800;font-size:52px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:6px}
-.big small{font-size:22px;font-weight:700;color:var(--muted);letter-spacing:0}
+.dist-row{display:flex;align-items:center;gap:16px}
+.big{font-family:var(--display);font-weight:800;font-size:34px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:6px;flex:none;min-width:104px}
+.big small{font-size:16px;font-weight:700;color:var(--muted);letter-spacing:0}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .row.between{justify-content:space-between}
-input[type=range]{width:100%;accent-color:var(--accent);height:30px;margin:0}
+input[type=range]{width:100%;flex:1;accent-color:var(--accent);height:34px;margin:0}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chips button{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer;font-variant-numeric:tabular-nums}
 .chips button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
@@ -281,11 +282,9 @@ a.btn{text-decoration:none}
         <button data-theme="pubs">Pubs</button>
         <button data-theme="green">Green</button>
       </div>
-      <div class="big"><span id="distBig">8.0</span><small>km</small></div>
-      <input type="range" id="distRange" min="2" max="30" step="0.5" value="8" aria-label="Distance in kilometres">
-      <div class="chips" id="distChips">
-        <button data-km="3">3 km</button><button data-km="5">5 km</button><button data-km="8" class="on">8 km</button>
-        <button data-km="12">12 km</button><button data-km="20">20 km</button>
+      <div class="dist-row">
+        <div class="big"><span id="distBig">8.0</span><small>km</small></div>
+        <input type="range" id="distRange" min="2" max="30" step="0.5" value="8" aria-label="Distance in kilometres">
       </div>
       <div class="via-row" id="viaRow" hidden><span class="via-pin small">⚑</span><span class="t">The loop goes via your pin</span><button class="link" id="viaClear">Remove</button></div>
       <div class="row">
@@ -300,7 +299,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v5.12</p>
+        <p class="tag" id="version">Round Here v5.13</p>
       </div>
     </div>
 
@@ -1497,7 +1496,7 @@ const el = {
   viaRow: $('viaRow'), viaClear: $('viaClear'), doneWrap: $('doneWrap'), doneTitle: $('doneTitle'), doneText: $('doneText'), doneClose: $('doneClose'),
   viaWrap: $('viaWrap'), viaTitle: $('viaTitle'), viaText: $('viaText'), viaSet: $('viaSet'), viaDrop: $('viaDrop'),
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
-  distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'),
+  distBig: $('distBig'), distRange: $('distRange'), btnGo: $('btnGo'), planHint: $('planHint'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
   routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'),
   statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), walkCredit: $('walkCredit')
@@ -1666,11 +1665,9 @@ function setDistance(km, fromSlider) {
   state.targetKm = km; store.set('distance', km);
   el.distBig.textContent = km.toFixed(1);
   if (!fromSlider) el.distRange.value = km;
-  el.distChips.querySelectorAll('button').forEach(b => b.classList.toggle('on', Number(b.dataset.km) === km));
 }
 setDistance(state.targetKm);
 el.distRange.addEventListener('input', () => setDistance(Number(el.distRange.value), true));
-el.distChips.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setDistance(Number(b.dataset.km)); });
 
 function setStart(p, mode, acc) {
   state.start = { p, mode, acc };
