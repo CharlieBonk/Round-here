@@ -51,7 +51,8 @@
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--fg);font:15px/1.4 var(--body);overflow:hidden;-webkit-text-size-adjust:100%;overscroll-behavior:none}
 button{font:inherit;color:inherit}
-#app{position:fixed;inset:0;overflow:hidden}
+#app{position:fixed;inset:0;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.card-text,.card h2,.card p,#cardText{-webkit-user-select:text;user-select:text}
 /* The map box is a square larger than the screen, centred on it, so it can be turned (two-finger twist, or heading-up on a walk) with CSS. */
 #map{position:absolute;left:50%;top:50%;width:var(--rot-size,1200px);height:var(--rot-size,1200px);margin-left:calc(var(--rot-size,1200px) / -2);margin-top:calc(var(--rot-size,1200px) / -2);background:var(--bg);transform:rotate(var(--map-rot,0deg));transform-origin:50% 50%;transition:transform .3s linear;will-change:transform}
 #map.snap,#map.snap .stop-pin,#map.snap .start-pin,#map.snap .via-pin,#map.snap .leaflet-popup-content-wrapper{transition:none}
@@ -316,7 +317,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v6.5</p>
+        <p class="tag" id="version">Round Here v6.6</p>
       </div>
     </div>
 
@@ -974,6 +975,20 @@ function insidePolygon(p, poly) {
     if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
   }
   return inside;
+}
+// An edited loop is tidied the way the generator tidies a new one (out-and-back stubs removed), then the spot that was
+// dropped must still be on it: if it only sat on the loop by way of a dead end, the tidy-up has cut it off. The loop
+// must not overlap itself much more than before either (the same street walked twice). Returns the tidied geometry, or null.
+function acceptEdit(res, dropP, prevCoords, prevCum) {
+  const overlapBefore = overlapFraction(resample(prevCoords, prevCum, 25).pts);
+  const proj = localProjector(res.coords[0]), un = localUnprojector(res.coords[0]);
+  const rawXy = res.coords.map(proj), onRaw = nearestOnRoute(rawXy, proj(dropP), 0, rawXy.length - 1);
+  const snapped = onRaw.point ? un(onRaw.point) : dropP;
+  const sn = removeSpurs(res.coords, res.eles || null, findSpurs(res.coords));
+  const cum = cumulative(sn.coords), snXy = sn.coords.map(proj), onSn = nearestOnRoute(snXy, proj(snapped), 0, snXy.length - 1);
+  const overlap = overlapFraction(resample(sn.coords, cum, 25).pts);
+  if (onSn.dist > 20 || overlap > overlapBefore + 0.15) return null;
+  return { coords: sn.coords, eles: sn.eles, cum, overlap };
 }
 // Share of a path's evenly spaced points that lie within tol metres of another path (how much of a new leg re-walks old ground).
 function retraceFraction(path, other, tol) {
@@ -2471,8 +2486,6 @@ function undoEdit() {
   restoreSnapshot(editHistory.pop(), editHistory.length > 0);
 }
 function renderUndo() { el.btnUndoEdit.hidden = !(editMode && editHistory.length); }
-// Out-and-back stretches in a route (the same path walked twice), in metres.
-function spurMetres(coords) { return findSpurs(coords).reduce((a, sp) => a + sp.len, 0); }
 function metresPerPixel() { const c = map.getCenter(); return 156543.03392 * Math.cos(c.lat * Math.PI / 180) / Math.pow(2, map.getZoom()); }
 function showEditPreview(prev, p, next, busy) {
   if (!editHandle) editHandle = L.marker(p, { icon: L.divIcon({ className: '', html: '<div class="edit-handle"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false, keyboard: false, zIndexOffset: 1200 }).addTo(map);
@@ -2519,14 +2532,11 @@ async function applyEdit(g) {
     let res;
     try { res = await orsRoute(pts, mode === 'green'); }
     catch (e) { if (e.kind === 'key' || e.kind === 'limit') res = await osrmRoute(pts); else throw e; }
-    // An edit must keep it a loop: refuse one that adds an out-and-back (a dead end, or the same street walked twice).
-    const spursBefore = spurMetres(r.coords), overlapBefore = overlapFraction(resample(r.coords, r.cum, 25).pts);
-    const spurs = findSpurs(res.coords), sn = removeSpurs(res.coords, res.eles || null, spurs.filter(sp => sp.len <= 60));
-    const cum = cumulative(sn.coords), overlapAfter = overlapFraction(resample(sn.coords, cum, 25).pts);
-    if (spurMetres(res.coords) > spursBefore + 60 || overlapAfter > overlapBefore + 0.08) throw new RouteError('spur', 'That would make the loop double back on itself. Try a spot that joins up with the rest.');
+    const ok = acceptEdit(res, g.p, r.coords, r.cum);
+    if (!ok) throw new RouteError('spur', 'That would make the loop double back on itself. Try a spot that joins up with the rest.');
     editHistory.push(serializeRoute(r));
-    r.coords = sn.coords; r.eles = sn.eles; r.cum = cum; r.total = r.cum[r.cum.length - 1];
-    r.wps = wps; r.edited = true; r.overlap = overlapAfter; r.err = Math.abs(r.total - (r.targetM || r.total)) / (r.targetM || r.total);
+    r.coords = ok.coords; r.eles = ok.eles; r.cum = ok.cum; r.total = r.cum[r.cum.length - 1];
+    r.wps = wps; r.edited = true; r.overlap = ok.overlap; r.err = Math.abs(r.total - (r.targetM || r.total)) / (r.targetM || r.total);
     r.profile = null; r.ascent = null; r.descent = null;
     if (r.eles) profileFromEles(r); else loadElevation(r);
     relocateStops(r);
