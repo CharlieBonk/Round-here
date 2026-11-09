@@ -317,7 +317,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v6.6</p>
+        <p class="tag" id="version">Round Here v6.7</p>
       </div>
     </div>
 
@@ -1612,6 +1612,7 @@ function setSheetHeight() {
 }
 function showView(name) {
   el.viewPlan.hidden = name !== 'plan'; el.viewRoute.hidden = name !== 'route'; el.viewWalk.hidden = name !== 'walk';
+  if (name !== 'plan') map.closePopup(pickPopup);
   el.btnShare.hidden = name === 'plan';
   state.mode = name;
   requestAnimationFrame(setSheetHeight);
@@ -1799,12 +1800,16 @@ el.btnLocate.addEventListener('click', () => {
   locateOnce({ centre: true, force: true });
 });
 // Long-press: a two-choice menu at the spot — move the start there, or make the loop go via it.
-const pickPopup = L.popup({ closeButton: false, className: 'pick', autoPan: true, autoPanPadding: [20, 80], offset: [0, -6], maxWidth: 320 });
+// The menu closes itself on the next tap elsewhere, but not on the tap that lifts off after the long-press (Leaflet would
+// otherwise close it the instant your finger comes up).
+const pickPopup = L.popup({ closeButton: false, closeOnClick: false, autoClose: false, className: 'pick', autoPan: true, autoPanPadding: [20, 80], offset: [0, -6], maxWidth: 320 });
+let pickOpenedAt = 0;
+map.on('click', () => { if (pickPopup.isOpen() && Date.now() - pickOpenedAt > 700) map.closePopup(pickPopup); });
 function pickMenu(p, isVia) {   // isVia: index of an existing pin, or null for a fresh spot
   const html = '<div class="pick-menu">' + (isVia != null ? '<button type="button" data-act="unvia">Remove this pin</button>' : '<button type="button" data-act="via">Go via here</button>') + '<button type="button" data-act="start">Start here</button></div>';
   const [ox, oy] = screenInset();
   pickPopup.options.autoPanPaddingTopLeft = L.point(ox + 16, oy + 110); pickPopup.options.autoPanPaddingBottomRight = L.point(ox + 16, oy + el.sheet.offsetHeight + 16);
-  pickPopup.setLatLng(p).setContent(html).openOn(map);
+  pickPopup.setLatLng(p).setContent(html).openOn(map); pickOpenedAt = Date.now();
   const box = pickPopup.getElement(); if (!box) return;
   box.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
     ev.stopPropagation(); map.closePopup(pickPopup);
