@@ -110,7 +110,10 @@ button{font:inherit;color:inherit}
 .via-pin.small{width:22px;height:22px;font-size:12px;box-shadow:none;cursor:default;flex:none}
 .via-row{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:14px;font-weight:600}
 .via-row .t{flex:1}
-.links{display:flex;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.route-head{display:flex;align-items:center;gap:10px;flex-wrap:nowrap}
+.route-head .eyebrow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.links{flex:none;display:flex;gap:12px;align-items:center}
+.links .link{font-size:13px;white-space:nowrap;padding:4px 0}
 .link:disabled{text-decoration:none;cursor:default;opacity:.7}
 .edit-bar{display:flex;flex-direction:column;gap:10px}
 .edit-handle{width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid var(--route);box-shadow:0 2px 8px rgba(0,0,0,.4)}
@@ -313,15 +316,15 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v6.4</p>
+        <p class="tag" id="version">Round Here v6.5</p>
       </div>
     </div>
 
     <!-- ROUTE -->
     <div class="view" id="viewRoute" hidden>
-      <div class="row between">
+      <div class="route-head">
         <div class="eyebrow" id="routeEyebrow">Your loop</div>
-        <span class="links"><button class="link" id="btnEdit">Edit loop</button><button class="link" id="btnBack">Change distance</button></span>
+        <span class="links"><button class="link" id="btnEdit">Edit loop</button><button class="link" id="btnUndoEdit" hidden>Undo</button><button class="link" id="btnBack">Change distance</button></span>
       </div>
       <div class="stats">
         <div class="stat"><div class="l">Distance</div><div class="v" id="stDist">—</div></div>
@@ -1572,7 +1575,7 @@ const el = {
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
   distBig: $('distBig'), distRange: $('distRange'), btnGo: $('btnGo'), planHint: $('planHint'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
-  routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'), btnEdit: $('btnEdit'), editBar: $('editBar'), editHint: $('editHint'), editDone: $('editDone'), editReset: $('editReset'), routeActions: $('routeActions'),
+  routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'), btnEdit: $('btnEdit'), btnUndoEdit: $('btnUndoEdit'), editBar: $('editBar'), editHint: $('editHint'), editDone: $('editDone'), editReset: $('editReset'), routeActions: $('routeActions'),
   statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), btnCompass: $('btnCompass'), creditBar: $('creditBar')
 };
 
@@ -1936,7 +1939,7 @@ function relocateStops(r) {
   r.stops.sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 function adoptRoute(route) {
-  sheetCollapsed = false; el.sheet.classList.remove('collapsed'); exitEdit();
+  sheetCollapsed = false; el.sheet.classList.remove('collapsed'); exitEdit(); editBase = null; editHistory = [];
   profileFromEles(route);
   state.route = route;
   if (!route.shared) store.set('loops', Number(store.get('loops', 0)) + 1);
@@ -2432,15 +2435,15 @@ const mapEl = $('map');
 // them). A touch within about 24 px of the line grabs it; the point you let go of goes in between the two neighbouring
 // waypoints and the whole loop is re-routed through it, snapped to the nearest path. One routing call per drag.
 const EDIT_HINT = 'Touch the line and drag it onto the street you want; let go and the loop re-routes through there.';
-let editMode = false, editBase = null, editGrab = null, editBusy = false, editHandle = null, editPreview = null, shuffleWarned = false;
+let editMode = false, editBase = null, editHistory = [], editGrab = null, editBusy = false, editHandle = null, editPreview = null, shuffleWarned = false;
 function routeWaypoints(r) {
   if (r.wps && r.wps.length) return r.wps.map(p => p.slice());
   const out = []; for (let i = 1; i <= 5; i++) out.push(pointAt(r.coords, r.cum, r.total * i / 6)); return out;
 }
 function enterEdit() {
   const r = state.route; if (!r || state.mode !== 'route' || editMode || state.busy) return;
-  editMode = true; editBase = serializeRoute(r); r.wps = routeWaypoints(r);
-  closeCard(); setCollapsed(false); snapNorth();
+  editMode = true; if (!editBase) editBase = serializeRoute(r); r.wps = routeWaypoints(r);
+  closeCard(); snapNorth(); renderUndo();
   el.routeActions.hidden = true; el.editBar.hidden = false; el.routeHint.hidden = true; elN.box.hidden = true;
   el.editHint.textContent = EDIT_HINT; el.btnEdit.textContent = 'Editing…'; el.btnEdit.disabled = true;
   requestAnimationFrame(setSheetHeight);
@@ -2449,17 +2452,27 @@ function exitEdit() {
   if (!editMode) return;
   editMode = false; editGrab = null; clearEditPreview(); map.dragging.enable();
   el.routeActions.hidden = false; el.editBar.hidden = true; el.routeHint.hidden = false;
-  el.btnEdit.textContent = 'Edit loop'; el.btnEdit.disabled = false;
+  el.btnEdit.textContent = 'Edit loop'; el.btnEdit.disabled = false; renderUndo();
   if (state.route) { renderRouteStats(); store.set('route', serializeRoute(state.route)); cacheForOffline(state.route); }
   requestAnimationFrame(setSheetHeight);
 }
+function restoreSnapshot(snap, edited) {
+  const r = reviveRoute(JSON.parse(JSON.stringify(snap)));
+  Object.assign(state.route, r, { edited, wps: routeWaypoints(r) });
+  drawRoute(state.route); renderRouteStats(); store.set('route', serializeRoute(state.route)); renderUndo();
+}
 function resetEdit() {
   if (!editBase || !state.route || editBusy) return;
-  const r = reviveRoute(JSON.parse(JSON.stringify(editBase)));
-  Object.assign(state.route, r, { edited: false, wps: routeWaypoints(r) });
-  drawRoute(state.route); renderRouteStats(); store.set('route', serializeRoute(state.route));
+  editHistory = []; restoreSnapshot(editBase, false);
   toast('Back to the loop as it was.');
 }
+function undoEdit() {
+  if (!editHistory.length || !state.route || editBusy) return;
+  restoreSnapshot(editHistory.pop(), editHistory.length > 0);
+}
+function renderUndo() { el.btnUndoEdit.hidden = !(editMode && editHistory.length); }
+// Out-and-back stretches in a route (the same path walked twice), in metres.
+function spurMetres(coords) { return findSpurs(coords).reduce((a, sp) => a + sp.len, 0); }
 function metresPerPixel() { const c = map.getCenter(); return 156543.03392 * Math.cos(c.lat * Math.PI / 180) / Math.pow(2, map.getZoom()); }
 function showEditPreview(prev, p, next, busy) {
   if (!editHandle) editHandle = L.marker(p, { icon: L.divIcon({ className: '', html: '<div class="edit-handle"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), interactive: false, keyboard: false, zIndexOffset: 1200 }).addTo(map);
@@ -2506,13 +2519,18 @@ async function applyEdit(g) {
     let res;
     try { res = await orsRoute(pts, mode === 'green'); }
     catch (e) { if (e.kind === 'key' || e.kind === 'limit') res = await osrmRoute(pts); else throw e; }
-    const sn = removeSpurs(res.coords, res.eles || null, findSpurs(res.coords).filter(sp => sp.len <= 60));   // only trivial stubs; a deliberate dead end stays
-    r.coords = sn.coords; r.eles = sn.eles; r.cum = cumulative(r.coords); r.total = r.cum[r.cum.length - 1];
-    r.wps = wps; r.edited = true; r.overlap = overlapFraction(resample(r.coords, r.cum, 25).pts); r.err = Math.abs(r.total - (r.targetM || r.total)) / (r.targetM || r.total);
+    // An edit must keep it a loop: refuse one that adds an out-and-back (a dead end, or the same street walked twice).
+    const spursBefore = spurMetres(r.coords), overlapBefore = overlapFraction(resample(r.coords, r.cum, 25).pts);
+    const spurs = findSpurs(res.coords), sn = removeSpurs(res.coords, res.eles || null, spurs.filter(sp => sp.len <= 60));
+    const cum = cumulative(sn.coords), overlapAfter = overlapFraction(resample(sn.coords, cum, 25).pts);
+    if (spurMetres(res.coords) > spursBefore + 60 || overlapAfter > overlapBefore + 0.08) throw new RouteError('spur', 'That would make the loop double back on itself. Try a spot that joins up with the rest.');
+    editHistory.push(serializeRoute(r));
+    r.coords = sn.coords; r.eles = sn.eles; r.cum = cum; r.total = r.cum[r.cum.length - 1];
+    r.wps = wps; r.edited = true; r.overlap = overlapAfter; r.err = Math.abs(r.total - (r.targetM || r.total)) / (r.targetM || r.total);
     r.profile = null; r.ascent = null; r.descent = null;
     if (r.eles) profileFromEles(r); else loadElevation(r);
     relocateStops(r);
-    drawRoute(r); renderRouteStats(); store.set('route', serializeRoute(r));
+    drawRoute(r); renderRouteStats(); store.set('route', serializeRoute(r)); renderUndo();
   } catch (e) {
     toast(e.kind === 'noroute' ? 'No path through there on foot. Try a spot on a street or footpath.' : (e.message || 'Could not re-route.'), 5000);
   } finally {
@@ -2526,6 +2544,7 @@ mapEl.addEventListener('touchcancel', editTouchEnd, { capture: true, passive: tr
 el.btnEdit.addEventListener('click', enterEdit);
 el.editDone.addEventListener('click', exitEdit);
 el.editReset.addEventListener('click', resetEdit);
+el.btnUndoEdit.addEventListener('click', undoEdit);
 
 // ---------- Map rotation ----------
 // Leaflet only knows north-up, so the map's box is a square larger than the screen (see the CSS) and is turned with CSS.
