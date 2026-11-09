@@ -317,7 +317,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v6.8</p>
+        <p class="tag" id="version">Round Here v6.9</p>
       </div>
     </div>
 
@@ -2099,9 +2099,9 @@ async function loadElevation(route) {
 }
 function renderRouteStats() {
   const r = state.route; if (!r) return;
-  const th = r.theme && THEME_LABEL[r.theme] ? THEME_LABEL[r.theme] + ' ' : '';
   renderNudge();
-  el.routeEyebrow.textContent = (r.stops && r.stops.length ? (r.shared ? 'Shared ' : 'Your ') + th + 'tour · ' + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : (r.shared ? 'Shared loop' : 'Your loop')) + (r.vias && r.vias.length && !r.shared ? (r.vias.length === 1 ? ' · via your pin' : ' · via ' + r.vias.length + ' pins') : '') + (r.replanned ? ' · new way back' : '');
+  // Just the stop count (and whether it was shared): short enough to share the line with the links, whatever the walk type.
+  el.routeEyebrow.textContent = (r.shared ? 'Shared' : '') + (r.stops && r.stops.length ? (r.shared ? ' · ' : '') + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : '');
   renderStopsList();
   el.stDist.textContent = fmtKm(r.total) + ' km';
   el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
@@ -2465,14 +2465,14 @@ function enterEdit() {
   const r = state.route; if (!r || state.mode !== 'route' || editMode || state.busy) return;
   editMode = true; if (!editBase) editBase = serializeRoute(r); r.wps = routeWaypoints(r);
   closeCard(); snapNorth(); renderUndo();
-  el.routeActions.hidden = true; el.editBar.hidden = false; el.routeHint.hidden = true; elN.box.hidden = true;
+  el.routeActions.hidden = true; el.editBar.hidden = false; el.routeHint.hidden = true; elN.box.hidden = true; el.btnBack.hidden = true;   // Done is the way out while editing; keeps the line short
   el.editHint.textContent = EDIT_HINT; el.btnEdit.textContent = 'Editing…'; el.btnEdit.disabled = true;
   requestAnimationFrame(setSheetHeight);
 }
 function exitEdit() {
   if (!editMode) return;
   editMode = false; editGrab = null; clearEditPreview(); map.dragging.enable();
-  el.routeActions.hidden = false; el.editBar.hidden = true; el.routeHint.hidden = false;
+  el.routeActions.hidden = false; el.editBar.hidden = true; el.routeHint.hidden = false; el.btnBack.hidden = false;
   el.btnEdit.textContent = 'Edit loop'; el.btnEdit.disabled = false; renderUndo();
   if (state.route) { renderRouteStats(); store.set('route', serializeRoute(state.route)); cacheForOffline(state.route); }
   requestAnimationFrame(setSheetHeight);
