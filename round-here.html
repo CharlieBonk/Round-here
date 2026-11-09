@@ -317,7 +317,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v6.7</p>
+        <p class="tag" id="version">Round Here v6.8</p>
       </div>
     </div>
 
@@ -1959,7 +1959,8 @@ function relocateStops(r) {
   r.stops.sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 function adoptRoute(route) {
-  sheetCollapsed = false; el.sheet.classList.remove('collapsed'); exitEdit(); editBase = null; editHistory = [];
+  exitEdit(); editBase = null; editHistory = [];
+  sheetCollapsed = true; el.sheet.classList.add('collapsed');   // tucked away by default: swipe up or tap the handle for stops, profile and hints
   profileFromEles(route);
   state.route = route;
   if (!route.shared) store.set('loops', Number(store.get('loops', 0)) + 1);
@@ -2246,7 +2247,7 @@ function startWalk(resume) {
   const saved = resume ? store.get('walk', null) : null;
   state.walk = { proj, xy: r.coords.map(proj), progress: saved ? saved.progress : 0, lastIdx: 0, offCount: 0, onCount: 0, off: false, startedAt: saved ? saved.startedAt : Date.now(), finished: false };
   if (!resume && r.stops) { r.stops.forEach(s => { s.visited = false; }); drawStops(r); store.set('route', serializeRoute(r)); }
-  state.following = true; el.btnRecentre.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; sheetCollapsed = false; el.sheet.classList.remove('collapsed');
+  state.following = true; el.btnRecentre.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; sheetCollapsed = true; el.sheet.classList.add('collapsed');
   closeCard();
   unlockAudio(); keepAwake(true); compassRequest();
   showView('walk'); updateWalkUi(null); renderNextStop(state.walk.progress);
@@ -2265,7 +2266,7 @@ function stopWalk() {
   keepAwake(false); store.del('walk'); state.walk = null;
   el.banner.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; closeCard();
   if (doneLine && restLine && state.route) { doneLine.setLatLngs([]); restLine.setLatLngs(state.route.coords); }
-  rot.auto = false; rot.northUp = false; sheetCollapsed = false; el.sheet.classList.remove('collapsed');
+  rot.auto = false; rot.northUp = false; sheetCollapsed = true; el.sheet.classList.add('collapsed');
   showView('route'); renderRouteStats(); fitRoute(state.route); renderCompass();
   el.btnStart.textContent = 'Start walking'; el.btnStart.dataset.resume = '0';
 }
@@ -2717,6 +2718,7 @@ setSheetHeight();
   if (shared) { savedRoute = shared; store.del('walk'); store.set('route', serializeRoute(shared)); }
   if (savedRoute) {
     state.route = savedRoute;
+    sheetCollapsed = true; el.sheet.classList.add('collapsed');
     drawRoute(savedRoute);
     setStart(savedRoute.coords[0], savedRoute.startMode || 'manual');
     if (savedRoute.vias && savedRoute.vias.length && !savedRoute.shared) { state.vias = savedRoute.vias.slice(); drawVias(); }
