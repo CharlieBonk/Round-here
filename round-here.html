@@ -52,11 +52,17 @@ html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--fg);font:15px/1.4 var(--body);overflow:hidden;-webkit-text-size-adjust:100%;overscroll-behavior:none}
 button{font:inherit;color:inherit}
 #app{position:fixed;inset:0;overflow:hidden}
-#map{position:absolute;inset:0;background:var(--bg)}
+/* The map box is a square larger than the screen, centred on it, so it can be turned (two-finger twist, or heading-up on a walk) with CSS. */
+#map{position:absolute;left:50%;top:50%;width:var(--rot-size,1200px);height:var(--rot-size,1200px);margin-left:calc(var(--rot-size,1200px) / -2);margin-top:calc(var(--rot-size,1200px) / -2);background:var(--bg);transform:rotate(var(--map-rot,0deg));transform-origin:50% 50%;transition:transform .3s linear;will-change:transform}
+#map.snap,#map.snap .stop-pin,#map.snap .start-pin,#map.snap .via-pin,#map.snap .leaflet-popup-content-wrapper{transition:none}
+#map .stop-pin,#map .start-pin,#map .via-pin{transform:rotate(calc(-1 * var(--map-rot,0deg)));transition:transform .3s linear}
+#map .leaflet-popup-content-wrapper{transform:rotate(calc(-1 * var(--map-rot,0deg)));transform-origin:50% calc(100% + 10px);transition:transform .3s linear}
+.credit-bar{position:absolute;z-index:600;right:0;bottom:var(--sheet-h,280px);font-size:10px;line-height:1.4;padding:1px 5px;background:rgba(255,255,255,.75);color:#333;border-top-left-radius:4px}
+.credit-bar a{color:#0078A8;text-decoration:none}
+.icon-btn.compass svg{fill:none;stroke:none;transform:rotate(var(--map-rot,0deg));transition:transform .3s linear}
+.icon-btn.compass .n{fill:var(--route)} .icon-btn.compass .s{fill:#9aa39c}
 .leaflet-container{font:12px/1.3 var(--body)}
-.leaflet-control-attribution{font-size:10px;background:rgba(255,255,255,.75)}
 .leaflet-top.leaflet-right{top:calc(env(safe-area-inset-top,0px) + 58px)}
-.leaflet-bottom.leaflet-right{bottom:var(--sheet-h,280px)}
 
 /* Floating top bar */
 .topbar{position:absolute;left:0;right:0;top:0;z-index:600;display:flex;justify-content:space-between;align-items:center;gap:8px;
@@ -209,13 +215,6 @@ a.btn{text-decoration:none}
   background:conic-gradient(from -30deg, rgba(23,105,224,.35) 0deg 60deg, transparent 60deg 360deg);display:none}
 .me-cone.show{display:block}
 .me-dot{position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:var(--me);border:3px solid #fff;box-shadow:0 0 0 2px rgba(23,105,224,.35),0 2px 6px rgba(0,0,0,.4)}
-/* Heading-up while walking: the map box becomes a square larger than the screen, centred on it, and is turned with CSS. */
-#map.walkmap{inset:auto;left:50%;top:50%;width:var(--rot-size,1200px);height:var(--rot-size,1200px);margin-left:calc(var(--rot-size,1200px) / -2);margin-top:calc(var(--rot-size,1200px) / -2);transform:rotate(var(--map-rot,0deg));transform-origin:50% 50%;transition:transform .3s linear;will-change:transform}
-#map.walkmap.snap,#map.walkmap.snap .stop-pin,#map.walkmap.snap .start-pin{transition:none}
-#map.walkmap .leaflet-control-container{display:none}
-#map.walkmap .stop-pin,#map.walkmap .start-pin{transform:rotate(calc(-1 * var(--map-rot,0deg)));transition:transform .3s linear}
-.credit{font-size:11px;color:var(--muted);text-align:right;margin:8px 0 0}
-.credit a{color:inherit}
 .leaflet-div-icon{background:transparent;border:0}
 
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -239,11 +238,15 @@ a.btn{text-decoration:none}
     <button class="icon-btn" id="btnLayer" aria-label="Switch map style" title="Map style">
       <svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
     </button>
+    <button class="icon-btn compass" id="btnCompass" aria-label="Point north" title="North up" hidden>
+      <svg viewBox="0 0 24 24"><path class="n" d="M12 2.5l3.6 9.5h-7.2z"/><path class="s" d="M12 21.5l-3.6-9.5h7.2z"/></svg>
+    </button>
     <button class="icon-btn" id="btnShare" aria-label="Share this route" title="Share" hidden>
       <svg viewBox="0 0 24 24"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
     </button>
   </div>
 
+  <div class="credit-bar" id="creditBar"><a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</div>
   <div class="banner" id="banner" hidden>
     <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
     <span id="bannerText">Off route</span>
@@ -299,7 +302,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v5.13</p>
+        <p class="tag" id="version">Round Here v6.0</p>
       </div>
     </div>
 
@@ -345,7 +348,6 @@ a.btn{text-decoration:none}
         <div class="progress-txt" id="wEta">—</div>
         <button class="btn danger" id="btnStop">Stop</button>
       </div>
-      <p class="credit" id="walkCredit">Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</p>
     </div>
   </section>
 
@@ -1499,7 +1501,7 @@ const el = {
   distBig: $('distBig'), distRange: $('distRange'), btnGo: $('btnGo'), planHint: $('planHint'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
   routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'),
-  statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), walkCredit: $('walkCredit')
+  statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), btnCompass: $('btnCompass'), creditBar: $('creditBar')
 };
 
 let toastTimer = null;
@@ -1530,8 +1532,8 @@ const layers = {
   osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }),
   topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, subdomains: 'abc', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM | &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)' })
 };
-const map = L.map('map', { zoomControl: false, attributionControl: true, tapHold: true });
-map.attributionControl.setPosition('bottomright');
+document.documentElement.style.setProperty('--rot-size', (Math.ceil(Math.sqrt(window.innerWidth * window.innerWidth + window.innerHeight * window.innerHeight)) + 40) + 'px');
+const map = L.map('map', { zoomControl: false, attributionControl: false, tapHold: true });
 const lastPos = store.get('lastPos', null);
 map.setView(lastPos || [54.3, -2.5], lastPos ? 14 : 6);
 let layerName = store.get('layer', 'osm');
@@ -1591,11 +1593,14 @@ function renderStopsList() {
   });
   list.hidden = false;
 }
+// Fit to the part of the map box that is actually on screen (the box is a square larger than the screen), north-up.
+function screenInset() { const sz = map.getSize(); return [Math.max(0, (sz.x - window.innerWidth) / 2), Math.max(0, (sz.y - window.innerHeight) / 2)]; }
 function fitRoute(route) {
   setSheetHeight();
-  const b = L.latLngBounds(route.coords);
-  const pb = Math.min(el.sheet.offsetHeight + 24, Math.round(map.getSize().y * 0.6));
-  map.fitBounds(b, { paddingTopLeft: [24, 64], paddingBottomRight: [24, pb], animate: false });
+  if (state.mode !== 'walk') snapNorth();
+  const b = L.latLngBounds(route.coords), [ox, oy] = screenInset();
+  const pb = Math.min(el.sheet.offsetHeight + 24, Math.round(window.innerHeight * 0.6));
+  map.fitBounds(b, { paddingTopLeft: [ox + 24, oy + 64], paddingBottomRight: [ox + 24, oy + pb], animate: false });
 }
 function placeStartMarker(p) {
   if (startMarker) startMarker.remove();
@@ -1707,6 +1712,8 @@ el.btnLocate.addEventListener('click', () => {
 const pickPopup = L.popup({ closeButton: false, className: 'pick', autoPan: true, autoPanPadding: [20, 80], offset: [0, -6], maxWidth: 320 });
 function pickMenu(p, isVia) {
   const html = '<div class="pick-menu">' + (isVia ? '<button type="button" data-act="unvia">Remove via</button>' : '<button type="button" data-act="via">Go via here</button>') + '<button type="button" data-act="start">Start here</button></div>';
+  const [ox, oy] = screenInset();
+  pickPopup.options.autoPanPaddingTopLeft = L.point(ox + 16, oy + 110); pickPopup.options.autoPanPaddingBottomRight = L.point(ox + 16, oy + el.sheet.offsetHeight + 16);
   pickPopup.setLatLng(p).setContent(html).openOn(map);
   const box = pickPopup.getElement(); if (!box) return;
   box.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
@@ -1760,9 +1767,14 @@ el.btnLayer.addEventListener('click', () => {
   map.removeLayer(layers[layerName]);
   layerName = layerName === 'osm' ? 'topo' : 'osm';
   layers[layerName].addTo(map); store.set('layer', layerName);
+  renderCredit();
   toast(layerName === 'topo' ? 'Topographic map' : 'Street map');
   if (state.route) cacheForOffline(state.route);
 });
+function renderCredit() {
+  el.creditBar.innerHTML = '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' + (layerName === 'topo' ? ', SRTM | © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a> (CC-BY-SA)' : ' contributors');
+}
+renderCredit();
 
 // ---------- Generate ----------
 async function makeLoop(seed) {
@@ -2121,7 +2133,7 @@ function startWalk(resume) {
   closeCard();
   unlockAudio(); keepAwake(true); compassRequest();
   showView('walk'); updateWalkUi(null); renderNextStop(state.walk.progress);
-  headingUp(true);
+  rot.auto = true; rot.northUp = false; renderCompass(); applyHeading(true);
   store.set('walk', { active: true, progress: state.walk.progress, startedAt: state.walk.startedAt });
   setStatus('wait', 'Waiting for GPS');
   if (state.watchId != null) navigator.geolocation.clearWatch(state.watchId);
@@ -2136,8 +2148,8 @@ function stopWalk() {
   keepAwake(false); store.del('walk'); state.walk = null;
   el.banner.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; closeCard();
   if (doneLine && restLine && state.route) { doneLine.setLatLngs([]); restLine.setLatLngs(state.route.coords); }
-  headingUp(false);
-  showView('route'); renderRouteStats(); fitRoute(state.route);
+  rot.auto = false; rot.northUp = false;
+  showView('route'); renderRouteStats(); fitRoute(state.route); renderCompass();
   el.btnStart.textContent = 'Start walking'; el.btnStart.dataset.resume = '0';
 }
 function setStatus(kind, text) { el.statusPill.className = 'status-pill' + (kind === 'off' ? ' off' : ''); el.statusText.textContent = text; }
@@ -2301,23 +2313,37 @@ el.btnStop.addEventListener('click', stopWalk);
 el.btnRecentre.addEventListener('click', () => { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); applyHeading(true); });
 map.on('dragstart', () => { if (state.mode === 'walk') { state.following = false; el.btnRecentre.hidden = false; } });
 
-// ---------- Heading-up (walk mode) ----------
-// While following a walk the map is turned so the way you face is up. Leaflet only knows north-up, so the map's box is
-// made a square larger than the screen, centred on it, and turned with CSS. Leaflet's finger-to-map maths is corrected
-// for the turn below, so taps and pinches land where they should; a drag snaps back to north (and stops following, as
-// before), and Re-centre turns it again. Direction comes from the compass where the phone allows it (works standing
-// still), otherwise from GPS while moving.
+// ---------- Map rotation ----------
+// Leaflet only knows north-up, so the map's box is a square larger than the screen (see the CSS) and is turned with CSS.
+// Two corrections make that feel native: Leaflet's finger-to-map maths is undone for the turn (taps and pinches land
+// where they should), and a one-finger drag is turned too (the map follows the finger whichever way it faces).
+// The map turns two ways: a two-finger twist, as on Google Maps, on any screen; and by itself while following a walk, so
+// the way you face is up (the compass where the phone allows it, otherwise GPS direction while moving).
+// The compass button shows whenever the map is turned: tap for north-up; on a walk, tap again for heading-up.
 const mapEl = $('map');
+const rot = { css: 0, auto: false, northUp: false, compass: null, compassAt: 0, touches: 0, lastApply: 0, coneAt: 0, listening: false, twist: null };
+function setRotCss(deg) { rot.css = deg; document.documentElement.style.setProperty('--map-rot', deg.toFixed(1) + 'deg'); renderCompass(); }
+function turned() { return Math.abs(((rot.css % 360) + 360) % 360) > 0.5; }
+function renderCompass() { el.btnCompass.hidden = !(state.mode === 'walk' || turned()); }
 // Leaflet measures fingers against the map box's screen rectangle, which is the wrong shape once the box is turned.
 // Undo the turn around the centre so the point lands in the map's own (unturned) frame.
 const mouseEventToContainerPoint0 = map.mouseEventToContainerPoint.bind(map);
 map.mouseEventToContainerPoint = function (e) {
-  if (!rot.on || rot.css === 0) return mouseEventToContainerPoint0(e);
+  if (!turned()) return mouseEventToContainerPoint0(e);
   const r = mapEl.getBoundingClientRect(), a = -rot.css * Math.PI / 180;
   const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
   return L.point(mapEl.clientWidth / 2 + dx * Math.cos(a) - dy * Math.sin(a), mapEl.clientHeight / 2 + dx * Math.sin(a) + dy * Math.cos(a));
 };
-const rot = { on: false, css: 0, compass: null, compassAt: 0, touches: 0, lastApply: 0, coneAt: 0, listening: false };
+// A one-finger drag: Leaflet moves the map by the finger's screen movement, so turn that movement into the map's frame.
+const dragMove0 = L.Draggable.prototype._onMove;
+L.Draggable.prototype._onMove = function (e) {
+  if (!turned() || this._element !== map._mapPane || !this._startPoint || (e.touches && e.touches.length !== 1)) return dragMove0.call(this, e);
+  this._parentScale = { x: 1, y: 1 };   // Leaflet would otherwise scale by the turned box's bigger outline
+  const f = e.touches ? e.touches[0] : e, s = this._startPoint, a = -rot.css * Math.PI / 180, dx = f.clientX - s.x, dy = f.clientY - s.y;
+  const fake = { clientX: s.x + dx * Math.cos(a) - dy * Math.sin(a), clientY: s.y + dx * Math.sin(a) + dy * Math.cos(a), target: e.target, type: e.type, preventDefault: () => { try { e.preventDefault(); } catch (err) {} } };
+  if (e.touches) fake.touches = [fake];
+  return dragMove0.call(this, fake);
+};
 function compassRequest() {
   try {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -2351,40 +2377,55 @@ function currentHeading() {
   return null;
 }
 function rotSize() { return Math.ceil(Math.sqrt(window.innerWidth * window.innerWidth + window.innerHeight * window.innerHeight)) + 40; }
-function headingUp(on) {
-  if (rot.on === on) return; rot.on = on;
-  mapEl.style.setProperty('--rot-size', rotSize() + 'px');
-  snapNorth();
-  mapEl.classList.toggle('walkmap', on);
-  if (el.walkCredit) el.walkCredit.innerHTML = layerName === 'topo' ? 'Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, SRTM · © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a>' : 'Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
-  map.invalidateSize({ animate: false });
-  if (on && state.lastFix) map.setView(state.lastFix.p, map.getZoom(), { animate: false });
-}
+// Straight to north, no animation (before fitting a route, say).
 function snapNorth() {
-  mapEl.classList.add('snap'); rot.css = 0; mapEl.style.setProperty('--map-rot', '0deg');
+  if (!turned()) { setRotCss(0); return; }
+  mapEl.classList.add('snap'); setRotCss(0);
   void mapEl.offsetWidth; // apply now, before anyone measures the map
   requestAnimationFrame(() => mapEl.classList.remove('snap'));
 }
+// Turn to an angle the short way round (animated by the CSS transition).
+function turnTo(deg) { const d = (((deg - rot.css) % 360) + 540) % 360 - 180; if (Math.abs(d) > 0.01) setRotCss(rot.css + d); }
+// Heading-up while following a walk.
 function applyHeading(force) {
-  if (!rot.on || !state.following || rot.touches > 0 || state.mode !== 'walk') return;
+  if (!rot.auto || rot.northUp || !state.following || rot.touches > 0 || state.mode !== 'walk') return;
   const h = currentHeading(); if (h == null) return;
   const now = Date.now(); if (!force && now - rot.lastApply < 200) return; rot.lastApply = now;
-  // Turn the short way round, keeping the CSS angle continuous so the transition never spins the long way.
   const d = (((-h - rot.css) % 360) + 540) % 360 - 180;
   if (Math.abs(d) < 1.5) return;
-  rot.css += d;
-  mapEl.style.setProperty('--map-rot', rot.css.toFixed(1) + 'deg');
+  setRotCss(rot.css + d);
 }
-// No turning while fingers are on the map (a pinch should not have the map spin under it); catch up when they lift.
+// Fingers: no automatic turning while any are on the map; a two-finger twist turns it by hand (after a few degrees, so
+// an ordinary pinch doesn't wobble). Leaflet's pinch handling keeps the map under the fingers while the box turns beneath.
+function fingerAngle(e) { const a = e.touches[0], b = e.touches[1]; return Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * 180 / Math.PI; }
 const touchUpdate = e => {
   rot.touches = e.touches ? e.touches.length : (e.type === 'mousedown' ? 1 : 0);
-  if (rot.on && rot.touches === 0) applyHeading(true);
+  if (e.type === 'touchstart' && e.touches.length === 2) rot.twist = { a0: fingerAngle(e), css0: rot.css, engaged: false };
+  if (e.type !== 'touchstart' && rot.touches < 2) { if (rot.twist && rot.twist.engaged) mapEl.classList.remove('snap'); rot.twist = null; }
+  if (rot.touches === 0) applyHeading(true);
+};
+const twistMove = e => {
+  const t = rot.twist; if (!t || e.touches.length !== 2) return;
+  const d = ((((fingerAngle(e) - t.a0) % 360) + 540) % 360) - 180;
+  if (!t.engaged) {
+    if (Math.abs(d) < 8) return;
+    t.engaged = true; t.a0 = fingerAngle(e); t.css0 = rot.css; mapEl.classList.add('snap');
+    if (state.mode === 'walk' && state.following) { state.following = false; el.btnRecentre.hidden = false; }
+    return;
+  }
+  setRotCss(t.css0 + d);
 };
 ['touchstart', 'touchend', 'touchcancel'].forEach(t => mapEl.addEventListener(t, touchUpdate, { capture: true, passive: true }));
+mapEl.addEventListener('touchmove', twistMove, { capture: true, passive: true });
 if (!('ontouchstart' in window)) { mapEl.addEventListener('mousedown', touchUpdate, { capture: true }); window.addEventListener('mouseup', touchUpdate, { capture: true }); }
-// A drag moves the map along the screen's axes, so it has to be north-up to feel right: snap, and following has already stopped.
-map.on('dragstart', () => { if (rot.on && rot.css !== 0) snapNorth(); });
-window.addEventListener('resize', () => { if (rot.on) { mapEl.style.setProperty('--rot-size', rotSize() + 'px'); map.invalidateSize({ animate: false }); if (state.following && state.lastFix) map.setView(state.lastFix.p, map.getZoom(), { animate: false }); } });
+el.btnCompass.addEventListener('click', () => {
+  if (state.mode === 'walk' && rot.auto && state.following) {
+    rot.northUp = !rot.northUp;
+    if (rot.northUp) turnTo(0); else applyHeading(true);
+    toast(rot.northUp ? 'North up' : 'Heading up');
+  } else { rot.northUp = state.mode === 'walk'; turnTo(0); }
+});
+window.addEventListener('resize', () => { document.documentElement.style.setProperty('--rot-size', rotSize() + 'px'); map.invalidateSize({ animate: false }); if (state.mode === 'walk' && state.following && state.lastFix) map.setView(state.lastFix.p, map.getZoom(), { animate: false }); });
 
 // ---------- Offline ----------
 // The service worker is registered at the top of this script. The route and its card text are already in localStorage,
