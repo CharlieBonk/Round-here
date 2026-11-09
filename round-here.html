@@ -121,7 +121,11 @@ button{font:inherit;color:inherit}
 .sheet{position:absolute;z-index:650;left:0;right:0;bottom:0;max-height:78%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--panel);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);
   padding-top:8px;padding-bottom:max(6px, calc(env(safe-area-inset-bottom,0px) - 8px));
   padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
-.grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 8px}
+.grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 8px;position:relative;cursor:pointer}
+.grip::after{content:"";position:absolute;inset:-14px -60px}
+.sheet.collapsed .grip{background:var(--muted)}
+/* Route sheet swiped down: just the headline, numbers and buttons, so the map shows through */
+.sheet.collapsed #viewRoute .stops,.sheet.collapsed #viewRoute .profile,.sheet.collapsed #viewRoute .nudge,.sheet.collapsed #viewRoute #routeHint{display:none}
 .view{display:flex;flex-direction:column;gap:12px}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .dist-row{display:flex;align-items:center;gap:16px}
@@ -302,7 +306,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v6.0</p>
+        <p class="tag" id="version">Round Here v6.1</p>
       </div>
     </div>
 
@@ -1839,6 +1843,7 @@ async function makeLoop(seed) {
 }
 // Make a freshly routed loop or tour the current one: elevation from the router if it came with it, draw, show, persist, fetch what's missing.
 function adoptRoute(route) {
+  sheetCollapsed = false; el.sheet.classList.remove('collapsed');
   if (route.eles) {
     const n = route.coords.length, step = Math.max(1, Math.floor(n / 200)), ds = [], ele = [];
     for (let i = 0; i < n; i += step) { ds.push(route.cum[i]); ele.push(route.eles[i]); }
@@ -2312,6 +2317,26 @@ el.btnStart.addEventListener('click', () => startWalk(el.btnStart.dataset.resume
 el.btnStop.addEventListener('click', stopWalk);
 el.btnRecentre.addEventListener('click', () => { state.following = true; el.btnRecentre.hidden = true; if (state.lastFix) map.setView(state.lastFix.p, Math.max(map.getZoom(), 16), { animate: false }); applyHeading(true); });
 map.on('dragstart', () => { if (state.mode === 'walk') { state.following = false; el.btnRecentre.hidden = false; } });
+
+// ---------- Route sheet: swipe down to tuck it away (stops and profile hidden, map re-fitted), swipe up or tap the handle to bring it back ----------
+let sheetCollapsed = false, sheetTouch = null;
+function setCollapsed(on) {
+  if (state.mode !== 'route') on = false;
+  if (sheetCollapsed === on) return;
+  sheetCollapsed = on; el.sheet.classList.toggle('collapsed', on); closeCard();
+  requestAnimationFrame(() => { setSheetHeight(); if (state.route && state.mode === 'route') fitRoute(state.route); });
+}
+el.sheet.addEventListener('touchstart', e => {
+  sheetTouch = (e.touches.length === 1 && !e.target.closest('#stopsList, input[type=range]')) ? { y: e.touches[0].clientY, top: el.sheet.scrollTop } : null;
+}, { passive: true });
+el.sheet.addEventListener('touchmove', e => {
+  const st = sheetTouch; if (!st || e.touches.length !== 1 || state.mode !== 'route') return;
+  const dy = e.touches[0].clientY - st.y;
+  if (dy > 45 && st.top <= 0 && !sheetCollapsed) { sheetTouch = null; setCollapsed(true); }
+  else if (dy < -45 && sheetCollapsed) { sheetTouch = null; setCollapsed(false); }
+}, { passive: true });
+el.sheet.addEventListener('touchend', () => { sheetTouch = null; }, { passive: true });
+el.sheet.querySelector('.grip').addEventListener('click', () => { if (state.mode === 'route') setCollapsed(!sheetCollapsed); });
 
 // ---------- Map rotation ----------
 // Leaflet only knows north-up, so the map's box is a square larger than the screen (see the CSS) and is turned with CSS.
