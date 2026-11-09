@@ -113,9 +113,9 @@ button{font:inherit;color:inherit}
 
 /* Bottom sheet */
 .sheet{position:absolute;z-index:650;left:0;right:0;bottom:0;max-height:78%;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;background:var(--panel);border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);
-  padding-top:10px;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+  padding-top:8px;padding-bottom:max(6px, calc(env(safe-area-inset-bottom,0px) - 8px));
   padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
-.grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
+.grip{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 8px}
 .view{display:flex;flex-direction:column;gap:12px}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .big{font-family:var(--display);font-weight:800;font-size:52px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:6px}
@@ -281,10 +281,6 @@ a.btn{text-decoration:none}
         <button data-theme="pubs">Pubs</button>
         <button data-theme="green">Green</button>
       </div>
-      <div class="row between">
-        <div class="eyebrow">How far today?</div>
-        <div class="eyebrow" id="startLabel">Starting from your location</div>
-      </div>
       <div class="big"><span id="distBig">8.0</span><small>km</small></div>
       <input type="range" id="distRange" min="2" max="30" step="0.5" value="8" aria-label="Distance in kilometres">
       <div class="chips" id="distChips">
@@ -304,9 +300,7 @@ a.btn{text-decoration:none}
         <div class="eyebrow">About</div>
         <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
         <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p>Fair-use limit: 6 loops a minute and 50 a day per phone; past that, loops fall back to standard routing until the limit resets.</p>
-        <p>Works without signal: the last loop you made, the map around it and its stop cards stay on your phone for a day and a half, or until you finish walking it. Making a new loop needs signal.</p>
-        <p class="tag" id="version">Round Here v5.10</p>
+        <p class="tag" id="version">Round Here v5.12</p>
       </div>
     </div>
 
@@ -1503,7 +1497,7 @@ const el = {
   viaRow: $('viaRow'), viaClear: $('viaClear'), doneWrap: $('doneWrap'), doneTitle: $('doneTitle'), doneText: $('doneText'), doneClose: $('doneClose'),
   viaWrap: $('viaWrap'), viaTitle: $('viaTitle'), viaText: $('viaText'), viaSet: $('viaSet'), viaDrop: $('viaDrop'),
   viewPlan: $('viewPlan'), viewRoute: $('viewRoute'), viewWalk: $('viewWalk'),
-  distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'), startLabel: $('startLabel'),
+  distBig: $('distBig'), distRange: $('distRange'), distChips: $('distChips'), btnGo: $('btnGo'), planHint: $('planHint'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
   routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'),
   statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), walkCredit: $('walkCredit')
@@ -1646,9 +1640,7 @@ elK.themes.addEventListener('click', e => {
 });
 function renderPlanHint() {
   const gps = !state.start || state.start.mode === 'gps';
-  const base = gps ? 'Starts and ends right where you are. Long-press the map to start somewhere else, or to go via a place.' : 'Starts and ends at the pin. Tap the location button to use your GPS instead.';
-  const tour = { walk: ' A plain loop has no stops, or pick Sights, History, Pubs or Green for a tour with stops.', all: ' Goes past the most-read places nearby, with a bit about each. Best in towns and cities.', history: ' Goes past churches, castles, monuments and old buildings nearby.', pubs: ' Goes past pubs nearby. Pace yourself.', green: ' Goes through parks, woods and viewpoints nearby.' };
-  el.planHint.textContent = base + (tour[state.theme] || '');
+  el.planHint.textContent = gps ? 'Long-press the map to start elsewhere or go via a place.' : 'Starts at the pin. Tap the location button to use GPS instead.';
 }
 
 // ---------- Settings ----------
@@ -1684,7 +1676,6 @@ function setStart(p, mode, acc) {
   state.start = { p, mode, acc };
   placeStartMarker(p);
   el.btnGo.disabled = state.busy;
-  el.startLabel.textContent = mode === 'gps' ? 'Starting from your location' : 'Starting from the pin';
   renderPlanHint();
 }
 
