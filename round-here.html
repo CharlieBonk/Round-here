@@ -98,7 +98,7 @@ button{font:inherit;color:inherit}
 .banner-btn:disabled{opacity:.7}
 /* End-of-walk card */
 .done-wrap{position:absolute;inset:0;z-index:1200;background:rgba(10,20,12,.45);display:grid;place-items:center;padding:24px}
-.done{background:var(--panel);color:var(--fg);border-radius:22px;padding:26px 22px 22px;text-align:center;width:min(100%,340px);box-shadow:0 18px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:10px;align-items:center}
+.done{background:var(--panel);color:var(--fg);border-radius:22px;padding:26px 22px 22px;text-align:center;width:min(100%,340px);max-height:100%;overflow-y:auto;box-shadow:0 18px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:10px;align-items:center}
 .done-emoji{font-size:44px;line-height:1}
 .done h2{font-family:var(--display);font-size:26px;margin:0;letter-spacing:-.01em}
 .done-nums{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
@@ -134,12 +134,18 @@ button{font:inherit;color:inherit}
 .grip::after{content:"";position:absolute;inset:-14px -60px}
 .sheet.collapsed .grip{background:var(--muted)}
 /* Route sheet swiped down: just the headline, numbers and buttons, so the map shows through */
-.sheet.collapsed #viewRoute .stops,.sheet.collapsed #viewRoute .profile,.sheet.collapsed #viewRoute .nudge,.sheet.collapsed #viewRoute #routeHint{display:none}
+.sheet.collapsed #viewRoute .stops,.sheet.collapsed #viewRoute .profile,.sheet.collapsed #viewRoute #routeHint{display:none}
 /* Walk sheet swiped down: status, Re-centre, the two distances and the progress bar; the next-stop line and the time/Stop row wait underneath */
 .sheet.collapsed #viewWalk #nextStop,.sheet.collapsed #viewWalk #walkFoot{display:none}
 .view{display:flex;flex-direction:column;gap:12px}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+/* The stop count on the route sheet is a button: tap it to open or tuck away the list */
+button.eyebrow{background:none;border:0;padding:8px 0;margin:-8px 0;text-align:left;cursor:pointer}
+button.eyebrow:disabled{cursor:default}
+.welcome{margin:0;font-size:14px;line-height:1.4;font-weight:600}
 .dist-row{display:flex;align-items:center;gap:16px}
+.dist-col{flex:none;min-width:104px;display:flex;flex-direction:column;gap:5px}
+.dist-time{font-size:12px;line-height:1;font-weight:600;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
 .big{font-family:var(--display);font-weight:800;font-size:34px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:6px;flex:none;min-width:104px}
 .big small{font-size:16px;font-weight:700;color:var(--muted);letter-spacing:0}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -165,7 +171,15 @@ input[type=range]{width:100%;flex:1;accent-color:var(--accent);height:34px;margi
 .profile text{font:600 11px var(--body);fill:var(--muted)}
 .progress{height:8px;border-radius:4px;background:var(--panel-2);overflow:hidden}
 .progress > div{height:100%;width:0;background:var(--route);border-radius:4px;transition:width .4s}
-.status-pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;background:var(--ok-bg);color:var(--ok)}
+.status-pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;background:var(--ok-bg);color:var(--ok);min-width:0;flex:0 1 auto}
+/* The same pill carries the next turn while on route: an arrow, the distance to it, the street */
+.status-pill.cue{font-size:15px;padding:6px 14px 6px 10px}
+.status-pill #statusText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.cue-icon{display:inline-flex;flex:none}
+.cue-icon svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.cue-icon.flip svg{transform:scaleX(-1)}
+.walk-head{flex-wrap:nowrap}
+.walk-head .link{flex:none}
 .status-pill.off{background:var(--warn-bg);color:var(--warn)}
 .status-pill .dot{width:9px;height:9px;border-radius:50%;background:currentColor}
 .walk-nums{display:flex;justify-content:space-between;align-items:baseline;font-variant-numeric:tabular-nums}
@@ -173,14 +187,9 @@ input[type=range]{width:100%;flex:1;accent-color:var(--accent);height:34px;margi
 .walk-nums span{color:var(--muted);font-weight:600}
 .progress-txt{font-size:14px;color:var(--muted);font-weight:600}
 .spinner{width:18px;height:18px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
-.mode-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .tag.green{color:var(--ok)}
 .tag .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
-.settings{display:flex;flex-direction:column;gap:10px;background:var(--panel-2);border-radius:14px;padding:14px}
-.settings p{margin:0;font-size:13px;color:var(--muted);line-height:1.45}
-.settings a{color:var(--accent);font-weight:600}
-.settings ol{margin:0;padding-left:18px;font-size:13px;color:var(--muted);line-height:1.5}
 .field{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:14px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel);color:var(--fg);min-width:0}
 .check{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
 .check input{width:20px;height:20px;accent-color:var(--accent);margin:0}
@@ -215,9 +224,23 @@ input[type=range]{width:100%;flex:1;accent-color:var(--accent);height:34px;margi
 .card-body .row .btn{flex:1}
 .icon-btn.small{width:36px;height:36px;border-radius:10px;box-shadow:none;font-size:22px;line-height:1;flex:none}
 a.btn{text-decoration:none}
-.nudge{display:flex;align-items:center;gap:8px;background:var(--accent-soft);border-radius:12px;padding:8px 8px 8px 12px}
-.nudge a{flex:1;min-width:0;color:var(--accent);font-weight:700;font-size:14px;text-decoration:none}
-.nudge-x{flex:none;width:30px;height:30px;border:0;border-radius:8px;background:transparent;color:var(--accent);font-size:20px;line-height:1;cursor:pointer}
+/* Arriving at a stop: a slim banner under the top bar; tap it for the story */
+.arrive{position:absolute;z-index:700;top:calc(env(safe-area-inset-top,0px) + 56px);left:max(12px,env(safe-area-inset-left,0px));right:calc(max(12px,env(safe-area-inset-right,0px)) + 52px);display:flex;align-items:stretch;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.arrive-main{flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:0;background:transparent;text-align:left;padding:8px 4px 8px 10px;cursor:pointer}
+.arrive-main .t{display:flex;flex-direction:column;min-width:0}
+.arrive-main b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arrive-main small{font-size:12px;color:var(--muted)}
+.arrive-main .stop-pin{border-color:var(--panel);box-shadow:none}
+.arrive-x{flex:none;width:42px;border:0;background:transparent;color:var(--muted);font-size:22px;line-height:1;cursor:pointer}
+/* Finish card: the loop's own shape, a share button, a quiet coffee link */
+.done-loop{width:116px;height:116px;display:block}
+.done-loop path{fill:none;stroke:var(--route);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+.done-loop circle{fill:var(--accent);stroke:var(--panel);stroke-width:3}
+.done-coffee{font-size:13px;font-weight:600;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:6px 8px}
+/* About, behind the Round Here badge */
+.brand{cursor:pointer}
+.credits{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}
+.credits a{color:inherit}
 .coffee{width:100%;justify-content:center}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -234,7 +257,7 @@ a.btn{text-decoration:none}
 
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
-@media (max-height:620px){.big{font-size:40px}.profile{height:72px}}
+@media (max-height:620px){.big{font-size:30px}.profile{height:72px}}
 </style>
 </head>
 <body>
@@ -242,7 +265,7 @@ a.btn{text-decoration:none}
   <div id="map" role="application" aria-label="Map"></div>
 
   <div class="topbar">
-    <div class="chip brand" id="brandChip">Round Here</div>
+    <button class="chip brand" id="brandChip" type="button" title="About">Round Here</button>
     <div class="chip gps-wait" id="gpsChip"><span class="dot"></span><span id="gpsText">Locating…</span></div>
   </div>
 
@@ -268,13 +291,29 @@ a.btn{text-decoration:none}
     <button class="banner-btn" id="btnReplan" hidden>New way back</button>
   </div>
   <div class="toast" id="toast" hidden role="status"></div>
+  <div class="arrive" id="arrive" hidden>
+    <button class="arrive-main" id="arriveOpen" type="button"><span class="stop-pin" id="arriveNum">1</span><span class="t"><b id="arriveTitle"></b><small>You're here · tap to read</small></span></button>
+    <button class="arrive-x" id="arriveClose" type="button" aria-label="Dismiss">×</button>
+  </div>
   <div class="done-wrap" id="doneWrap" hidden>
     <div class="done" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
-      <div class="done-emoji">🎉</div>
+      <svg class="done-loop" id="doneLoop" viewBox="0 0 120 120" aria-hidden="true"></svg>
       <h2 id="doneTitle">Loop complete</h2>
       <p class="done-nums" id="doneText">—</p>
-      <p class="hint">Nice one. You're back where you started.</p>
-      <button class="btn primary" id="doneClose">Close</button>
+      <button class="btn primary" id="doneShare"><svg viewBox="0 0 24 24"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>Share</button>
+      <button class="btn secondary" id="doneClose">Close</button>
+      <a class="done-coffee" id="doneCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">Buy me a coffee</a>
+    </div>
+  </div>
+  <div class="done-wrap" id="aboutWrap" hidden>
+    <div class="done" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <h2 id="aboutTitle">Round Here</h2>
+      <p class="hint">Circular walks from wherever you are: pick a distance, follow the loop.</p>
+      <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+      <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
+      <p class="credits">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Routing © <a href="https://openrouteservice.org" target="_blank" rel="noopener">openrouteservice.org</a> by HeiGIT, backup by <a href="https://www.fossgis.de" target="_blank" rel="noopener">FOSSGIS</a> · Places powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a> · Elevation by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> · Stories and photos from <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA)</p>
+      <p class="tag" id="version">Round Here v7.0</p>
+      <button class="btn primary" id="aboutClose">Close</button>
     </div>
   </div>
   <div class="done-wrap" id="viaWrap" hidden>
@@ -292,7 +331,7 @@ a.btn{text-decoration:none}
 
     <!-- PLAN -->
     <div class="view" id="viewPlan">
-      <div class="eyebrow">What kind of walk?</div>
+      <p class="welcome" id="welcome" hidden>Circular walks from wherever you are. Just walk, or tour the sights, history, pubs or green spaces.</p>
       <div class="chips themes" id="themes" aria-label="Walk type">
         <button data-theme="walk" class="on">Just walk</button>
         <button data-theme="all">Sights</button>
@@ -301,7 +340,7 @@ a.btn{text-decoration:none}
         <button data-theme="green">Green</button>
       </div>
       <div class="dist-row">
-        <div class="big"><span id="distBig">8.0</span><small>km</small></div>
+        <div class="dist-col"><div class="big"><span id="distBig">8.0</span><small>km</small></div><div class="dist-time" id="distTime">about 1 h 45</div></div>
         <input type="range" id="distRange" min="2" max="30" step="0.5" value="8" aria-label="Distance in kilometres">
       </div>
       <div class="via-row" id="viaRow" hidden><span class="via-pin small">⚑</span><span class="t">The loop goes via your pin</span><button class="link" id="viaClear">Remove</button></div>
@@ -309,32 +348,18 @@ a.btn{text-decoration:none}
         <button class="btn primary" id="btnGo" disabled>Make me a loop</button>
       </div>
       <p class="hint" id="planHint">Starts and ends right where you are. Long-press the map to start somewhere else.</p>
-      <div class="mode-row">
-        <span class="tag" id="modeTag"><span class="dot"></span><span id="modeText">Green routing</span></span>
-        <button class="link" id="btnSettings">About</button>
-      </div>
-      <div class="settings" id="settings" hidden>
-        <div class="eyebrow">About</div>
-        <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
-        <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
-        <p class="tag" id="version">Round Here v6.9</p>
-      </div>
     </div>
 
     <!-- ROUTE -->
     <div class="view" id="viewRoute" hidden>
       <div class="route-head">
-        <div class="eyebrow" id="routeEyebrow">Your loop</div>
+        <button class="eyebrow" id="routeEyebrow" type="button" disabled></button>
         <span class="links"><button class="link" id="btnEdit">Edit loop</button><button class="link" id="btnUndoEdit" hidden>Undo</button><button class="link" id="btnBack">Change distance</button></span>
       </div>
       <div class="stats">
         <div class="stat"><div class="l">Distance</div><div class="v" id="stDist">—</div></div>
         <div class="stat"><div class="l">Ascent</div><div class="v" id="stAsc">—</div></div>
         <div class="stat"><div class="l">Est. time</div><div class="v" id="stTime">—</div></div>
-      </div>
-      <div class="nudge" id="nudge" hidden>
-        <a id="nudgeLink" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">Enjoying Round Here? Buy me a coffee ☕ £4</a>
-        <button class="nudge-x" id="nudgeClose" aria-label="Not now">×</button>
       </div>
       <div class="stops" id="stopsList" hidden></div>
       <svg class="profile" id="profile" aria-label="Elevation profile"></svg>
@@ -356,8 +381,8 @@ a.btn{text-decoration:none}
 
     <!-- WALK -->
     <div class="view" id="viewWalk" hidden>
-      <div class="row between">
-        <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Waiting for GPS</span></div>
+      <div class="row between walk-head">
+        <div class="status-pill" id="statusPill"><span class="dot" id="statusDot"></span><span class="cue-icon" id="statusIcon" hidden></span><span id="statusText">Waiting for GPS</span></div>
         <button class="link" id="btnRecentre" hidden>Re-centre</button>
       </div>
       <button class="next link" id="nextStop" hidden style="text-decoration:none;padding:0"></button>
@@ -400,7 +425,7 @@ a.btn{text-decoration:none}
 <script>
 (() => {
 'use strict';
-// Offline support: a service worker (sw.js, next to this file) keeps the app, the map around the current loop and the
+// Offline support: a service worker (sw.js, next to this file) keeps the app, the map squares already looked at and the
 // stop photos on the phone. Registered first so it is in place even if something later on this page fails to load.
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
@@ -841,6 +866,7 @@ function tileUrl(z, x, y, layer) {
   return 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png';
 }
 // The squares along a route, plus a margin either side (two at the following zoom: the turned walk map shows more), closest zoom first.
+// NOT USED since v7.0: fetching map squares ahead of time is against the map servers' rules (see sw.js). Left in place, uncalled.
 function routeTiles(coords, layer, maxTiles) {
   const urls = [], seen = new Set();
   for (const [z, pad] of [[16, 2], [15, 1], [14, 1], [13, 0], [12, 0]]) {
@@ -998,17 +1024,107 @@ function retraceFraction(path, other, tol) {
   for (const p of pts) if (nearestOnRoute(xy, proj(p), 0, xy.length - 1).dist <= (tol || 25)) hit++;
   return hit / pts.length;
 }
+// ---- Turn cues ----
+// How far the line swings at distance d along it: right is positive, left negative. The few metres either side of the
+// spot are skipped, so a junction drawn slightly off still reads as the turn it is.
+function turnAngle(coords, cum, d) {
+  const total = cum[cum.length - 1];
+  const a1 = pointAt(coords, cum, Math.max(0, d - 30)), a2 = pointAt(coords, cum, Math.max(0, d - 5));
+  const b1 = pointAt(coords, cum, Math.min(total, d + 5)), b2 = pointAt(coords, cum, Math.min(total, d + 30));
+  if (haversine(a1, a2) < 4 || haversine(b1, b2) < 4) return 0;
+  return ((bearingBetween(b1, b2) - bearingBetween(a1, a2) + 540) % 360) - 180;
+}
+// The router's manoeuvres, in walking order (each { p: place, t: type, n: street, d: metres to the next one, x: exit }),
+// pinned to the finished line. Each is looked for a little beyond where the last one sat and never backwards, so a loop
+// that crosses itself can't mix them up; one whose spot was tidied off the line (a snipped dead end) is dropped; and a
+// turn only counts if the line really swings that way there. Joins at the loop's own waypoints arrive as "arrive/depart",
+// so they become a cue only where the line truly turns. Types follow openrouteservice: 0 left, 1 right, 2/3 sharp,
+// 4/5 slight, 7 roundabout, 9 U-turn, 12/13 keep left/right. Returns [{ at: metres along the line, t, n, x }].
+function buildCues(coords, cum, turns, fromIdx) {
+  if (!turns || !turns.length || !coords || coords.length < 2) return [];
+  const proj = localProjector(coords[0]), xy = coords.map(proj), total = cum[cum.length - 1], out = [];
+  let from = Math.min(xy.length - 2, Math.max(0, fromIdx || 0)), lastAt = cum[from], pending = 0;
+  for (const t of turns) {
+    if (!t || !t.p) continue;
+    const q = proj(t.p), limit = lastAt + pending + Math.max(80, pending * 0.25);
+    let best = null;
+    for (let i = from; i < xy.length - 1 && cum[i] <= limit; i++) {
+      const a = xy[i], b = xy[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+      let u = l2 ? ((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / l2 : 0; u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const dist = Math.hypot(q[0] - a[0] - u * dx, q[1] - a[1] - u * dy);
+      if (dist <= 15) { if (!best || dist < best.dist) best = { dist, i, u }; }
+      else if (best) break;
+    }
+    if (!best) { pending += t.d || 0; continue; }
+    const at = cum[best.i] + best.u * (cum[best.i + 1] - cum[best.i]), ang = turnAngle(coords, cum, at), mag = Math.abs(ang);
+    from = best.i; lastAt = at; pending = t.d || 0;
+    let type = null;
+    if (t.t === 9) { if (mag > 120) type = 9; }
+    else if (t.t === 7) type = 7;
+    else if (t.t === 0 || t.t === 1 || t.t === 2 || t.t === 3) { if (ang * (t.t % 2 ? 1 : -1) >= 25) type = t.t; }
+    else if (t.t === 4 || t.t === 5 || t.t === 12 || t.t === 13) { if (ang * (t.t % 2 ? 1 : -1) >= -15) type = t.t; }
+    else if (mag >= 45 && mag <= 150) type = (mag > 115 ? 2 : 0) + (ang > 0 ? 1 : 0);
+    if (type == null || at < 8 || at > total - 12) continue;
+    const prev = out[out.length - 1];
+    if (prev && at - prev.at < 15) { if (!prev.n && t.n) prev.n = t.n; continue; }
+    out.push({ at: Math.round(at), t: type, n: t.n || '', x: type === 7 ? (t.x || 0) : 0 });
+  }
+  return out;
+}
+// A route squeezed into a w-by-h box (north up, shape kept, centred): for the drawing on the finish card and the share
+// picture. Returns the line's points and a function that places any other [lat, lon] in the same box.
+function fitShape(coords, w, h, pad) {
+  pad = pad || 0;
+  let la0 = Infinity, la1 = -Infinity, lo0 = Infinity, lo1 = -Infinity;
+  for (const c of coords) { if (c[0] < la0) la0 = c[0]; if (c[0] > la1) la1 = c[0]; if (c[1] < lo0) lo0 = c[1]; if (c[1] > lo1) lo1 = c[1]; }
+  const proj = localProjector([(la0 + la1) / 2, (lo0 + lo1) / 2]), xy = coords.map(proj);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const q of xy) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+  const k = Math.min((w - 2 * pad) / Math.max(1, x1 - x0), (h - 2 * pad) / Math.max(1, y1 - y0));
+  const ox = (w - (x1 - x0) * k) / 2, oy = (h - (y1 - y0) * k) / 2;
+  const put = q => [ox + (q[0] - x0) * k, oy + (y1 - q[1]) * k];
+  return { pts: xy.map(put), place: p => put(proj(p)) };
+}
 /*PURE-END*/
 
 // ---------- Network ----------
 const ROUTER = 'https://routing.openstreetmap.de/routed-foot/route/v1/foot/';
 class RouteError extends Error { constructor(kind, msg) { super(msg); this.kind = kind; } }
 function timeoutSignal(ms) { try { return AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined; } catch (e) { return undefined; } }
+// Each router's own turn list in one shape: { p: [lat, lon] where the manoeuvre happens, t: type (openrouteservice's
+// numbering), n: street name, d: metres to the next manoeuvre, x: roundabout exit }. Pinned to the finished line by buildCues.
+function orsTurns(f, coords) {
+  const out = [];
+  try {
+    for (const seg of ((f.properties && f.properties.segments) || [])) for (const st of (seg.steps || [])) {
+      const i = st.way_points ? st.way_points[0] : null;
+      if (typeof i !== 'number' || !coords[i]) continue;
+      out.push({ p: coords[i], t: st.type, n: st.name && st.name !== '-' ? String(st.name) : '', d: +st.distance || 0, x: +st.exit_number || 0 });
+    }
+  } catch (e) {}
+  return out;
+}
+function osrmTurns(route) {
+  const side = { 'left': 0, 'right': 1, 'sharp left': 2, 'sharp right': 3, 'slight left': 4, 'slight right': 5, 'uturn': 9 }, out = [];
+  try {
+    for (const leg of (route.legs || [])) for (const st of (leg.steps || [])) {
+      const m = st.maneuver || {}, loc = m.location; if (!loc) continue;
+      let t = 6;
+      if (m.type === 'depart') t = 11; else if (m.type === 'arrive') t = 10;
+      else if (m.type === 'roundabout' || m.type === 'rotary') t = 7;
+      else if (m.type === 'exit roundabout' || m.type === 'exit rotary') t = 8;
+      else if (m.type === 'fork') t = /left/.test(m.modifier || '') ? 12 : /right/.test(m.modifier || '') ? 13 : 6;
+      else if (m.type !== 'new name' && m.type !== 'notification' && side[m.modifier] != null) t = side[m.modifier];
+      out.push({ p: [loc[1], loc[0]], t, n: st.name || '', d: +st.distance || 0, x: +m.exit || 0 });
+    }
+  } catch (e) {}
+  return out;
+}
 
 // "Continue straight" forbids turning round at a waypoint, so the route carries on round the block instead of retracing. A stop at a true dead end can't be routed that way, so retry without.
 async function osrmRoute(points, allowUturns) {
   const coordStr = points.map(p => p[1].toFixed(6) + ',' + p[0].toFixed(6)).join(';');
-  const url = ROUTER + coordStr + '?overview=full&geometries=geojson&steps=false&alternatives=false' + (allowUturns ? '' : '&continue_straight=true');
+  const url = ROUTER + coordStr + '?overview=full&geometries=geojson&steps=true&alternatives=false' + (allowUturns ? '' : '&continue_straight=true');
   let res;
   try { res = await fetch(url, { signal: timeoutSignal(20000) }); }
   catch (e) { throw new RouteError('network', 'Could not reach the routing service. Check your signal and try again.'); }
@@ -1021,7 +1137,7 @@ async function osrmRoute(points, allowUturns) {
     const e = new RouteError('noroute', 'No route'); const m = /coordinate (\d+)/.exec(j.message || ''); if (m) e.badIndex = +m[1]; throw e;
   }
   const r = j.routes[0];
-  return { coords: r.geometry.coordinates.map(c => [c[1], c[0]]), distance: r.distance };
+  return { coords: r.geometry.coordinates.map(c => [c[1], c[0]]), distance: r.distance, turns: osrmTurns(r) };
 }
 
 async function fetchElevation(pts) {
@@ -1064,7 +1180,7 @@ async function orsRoute(points, green, allowUturns, avoid) {
   if (orsGreenRejected) green = false;
   const body = {
     coordinates: points.map(p => [+p[1].toFixed(6), +p[0].toFixed(6)]),
-    preference: 'recommended', elevation: true, instructions: false,
+    preference: 'recommended', elevation: true, instructions: true,
     radiuses: points.map(() => -1)
   };
   if (!allowUturns && !orsStraightRejected && points.length > 2) body.continue_straight = true;
@@ -1099,7 +1215,7 @@ async function orsRoute(points, green, allowUturns, avoid) {
   const raw = f.geometry.coordinates;
   const coords = raw.map(c => [c[1], c[0]]);
   const eles = raw.every(c => typeof c[2] === 'number') ? raw.map(c => c[2]) : null;
-  return { coords, eles, distance: f.properties && f.properties.summary ? f.properties.summary.distance : null };
+  return { coords, eles, distance: f.properties && f.properties.summary ? f.properties.summary.distance : null, turns: orsTurns(f, coords) };
 }
 
 // ---------- Wikipedia (any language) ----------
@@ -1372,7 +1488,7 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool, labe
     const err = Math.abs(total - targetM) / targetM;
     const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
     // A loop that is a bit long beats one that walks the same way back.
-    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap, score: err + 0.6 * Math.max(0, overlap - 0.08), seed, seq: seq.slice() };
+    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap, score: err + 0.6 * Math.max(0, overlap - 0.08), seed, seq: seq.slice(), turns: res.turns || null };
     // Keep the attempt nearest the asked-for distance among those that don't double back; a doubling-back one only as a last resort.
     if (overlap <= 0.25) { if (!best || best.overlap > 0.25 || err < best.err) best = cand; }
     else if (!best || (best.overlap > 0.25 && cand.score < best.score)) best = cand;
@@ -1495,7 +1611,7 @@ async function generateLoop(start, targetM, seed, onProgress, router, vias) {
       const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
       const err = Math.abs(total - targetM) / targetM;
       const score = err + 0.6 * Math.max(0, overlap - 0.08);
-      const cand = { coords: res.coords, eles: res.eles || null, cum, total, overlap, err, score, seed, wps: wps.slice(1, -1) };
+      const cand = { coords: res.coords, eles: res.eles || null, cum, total, overlap, err, score, seed, wps: wps.slice(1, -1), turns: res.turns || null };
       if (overlap <= 0.25) { if (!best || best.overlap > 0.25 || err < best.err) best = cand; }
       else if (!best || (best.overlap > 0.25 && score < best.score)) best = cand;
       if (err < 0.05) break;
@@ -1564,7 +1680,7 @@ async function fitLeg(P, H, wantM, stops, side, router, avoid, onProgress) {
     const cum = cumulative(snipped.coords), total = cum[cum.length - 1];
     if (total < 50) return best;
     const err = Math.abs(total - wantM) / wantM;
-    const cand = { coords: snipped.coords, eles: snipped.eles, total, err, kept: seq.map(s => s.id) };
+    const cand = { coords: snipped.coords, eles: snipped.eles, total, err, kept: seq.map(s => s.id), turns: res.turns || null };
     if (!best || err < best.err) best = cand;
     if (err < 0.1) break;
     if (total > wantM * 1.1 && seq.length) { seq = weakest(seq); continue; }
@@ -1591,7 +1707,8 @@ const el = {
   distBig: $('distBig'), distRange: $('distRange'), btnGo: $('btnGo'), planHint: $('planHint'),
   stDist: $('stDist'), stAsc: $('stAsc'), stTime: $('stTime'), profile: $('profile'), btnStart: $('btnStart'), btnShuffle: $('btnShuffle'), btnGpx: $('btnGpx'), btnBack: $('btnBack'), routeHint: $('routeHint'),
   routeEyebrow: $('routeEyebrow'), stopsList: $('stopsList'), nextStop: $('nextStop'), btnEdit: $('btnEdit'), btnUndoEdit: $('btnUndoEdit'), editBar: $('editBar'), editHint: $('editHint'), editDone: $('editDone'), editReset: $('editReset'), routeActions: $('routeActions'),
-  statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), btnCompass: $('btnCompass'), creditBar: $('creditBar')
+  statusPill: $('statusPill'), statusText: $('statusText'), btnRecentre: $('btnRecentre'), wDone: $('wDone'), wLeft: $('wLeft'), progBar: $('progBar'), wEta: $('wEta'), btnStop: $('btnStop'), btnCompass: $('btnCompass'), creditBar: $('creditBar'),
+  statusDot: $('statusDot'), statusIcon: $('statusIcon'), doneShare: $('doneShare')
 };
 
 let toastTimer = null;
@@ -1718,14 +1835,26 @@ const state = {
   theme: ['walk', 'all', 'history', 'pubs', 'green'].indexOf(store.get('theme', 'walk')) >= 0 ? store.get('theme', 'walk') : 'walk'
 };
 state.kind = state.theme === 'walk' ? 'loop' : 'tour';
+// First visit: the sheet says what the app is and the main button asks for location, so the phone's permission pop-up only
+// ever follows a tap. Anyone who has had a fix here before skips this. `askLocation` also comes on when locating fails,
+// so the button offers another go instead of sitting greyed out.
+let welcome = !store.get('welcomed', false) && !lastPos, askLocation = welcome, locating = false;
+function renderGo() {
+  if (state.busy) return;
+  const make = state.kind === 'tour' ? 'Make me a tour' : 'Make me a loop';
+  el.btnGo.textContent = state.start ? make : locating ? 'Finding you…' : askLocation ? 'Use my location' : make;
+  el.btnGo.disabled = !state.start && (locating || !askLocation);
+  $('welcome').hidden = !welcome;
+  requestAnimationFrame(setSheetHeight);
+}
+function endWelcome() { if (!welcome) return; welcome = false; store.set('welcomed', true); renderGo(); }
 
 // ---------- Walk type (one chip row: plain loop or a themed tour) ----------
 const elK = { themes: $('themes') };
 function renderKind() {
   state.kind = state.theme === 'walk' ? 'loop' : 'tour';
-  const t = state.kind === 'tour';
   elK.themes.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === state.theme));
-  el.btnGo.textContent = t ? 'Make me a tour' : 'Make me a loop';
+  renderGo();
   renderPlanHint();
   requestAnimationFrame(setSheetHeight);
 }
@@ -1738,28 +1867,19 @@ function renderPlanHint() {
   el.planHint.textContent = gps ? 'Long-press the map to start elsewhere or go via a place.' : 'Starts at the pin. Tap the location button to use GPS instead.';
 }
 
-// ---------- Settings ----------
-const elS = { btnSettings: $('btnSettings'), settings: $('settings'), modeTag: $('modeTag'), modeText: $('modeText') };
+// ---------- Routing preference; About (behind the Round Here badge) ----------
 function routingMode() { return 'green'; }
-function renderRoutingMode() { elS.modeTag.className = 'tag green'; elS.modeText.textContent = 'Green routing'; }
 function renderDiag() { const d = $('diag'); if (!d) return; d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
-// Coffee nudge: one line on the route screen from the third loop on, gone for good once dismissed or tapped.
-const elN = { box: $('nudge'), link: $('nudgeLink'), close: $('nudgeClose'), about: $('aboutCoffee') };
-function nudgeDone() { store.set('nudge', 'done'); elN.box.hidden = true; }
-function renderNudge() {
-  const r = state.route;
-  elN.box.hidden = !(r && !r.shared && store.get('nudge', '') !== 'done' && Number(store.get('loops', 0)) >= 3);
-}
-elN.close.addEventListener('click', nudgeDone);
-elN.link.addEventListener('click', () => { store.set('nudge', 'done'); });
-elN.about.addEventListener('click', () => { store.set('nudge', 'done'); });
-elS.btnSettings.addEventListener('click', () => { elS.settings.hidden = !elS.settings.hidden; renderDiag(); requestAnimationFrame(setSheetHeight); });
-renderRoutingMode();
+const elAb = { wrap: $('aboutWrap'), close: $('aboutClose') };
+el.brand.addEventListener('click', () => { elAb.wrap.hidden = false; });
+elAb.close.addEventListener('click', () => { elAb.wrap.hidden = true; });
+elAb.wrap.addEventListener('click', e => { if (e.target === elAb.wrap) elAb.wrap.hidden = true; });
 el.distRange.value = state.targetKm;
 
 function setDistance(km, fromSlider) {
   state.targetKm = km; store.set('distance', km);
   el.distBig.textContent = km.toFixed(1);
+  $('distTime').textContent = 'about ' + fmtTime(Math.max(5, Math.round(estimateMinutes(km * 1000, 0) / 5) * 5));
   if (!fromSlider) el.distRange.value = km;
 }
 setDistance(state.targetKm);
@@ -1768,7 +1888,7 @@ el.distRange.addEventListener('input', () => setDistance(Number(el.distRange.val
 function setStart(p, mode, acc) {
   state.start = { p, mode, acc };
   placeStartMarker(p);
-  el.btnGo.disabled = state.busy;
+  renderGo();
   renderPlanHint();
 }
 
@@ -1777,21 +1897,25 @@ function setGps(status, text) { el.gpsChip.className = 'chip ' + status; el.gpsT
 
 function locateOnce(opts) {
   opts = opts || {};
-  if (!('geolocation' in navigator)) { setGps('gps-bad', 'No GPS on this device'); return; }
+  if (!('geolocation' in navigator)) { setGps('gps-bad', 'No GPS on this device'); askLocation = false; renderGo(); return; }
   setGps('gps-wait', 'Locating…');
+  locating = true; renderGo();
   navigator.geolocation.getCurrentPosition(pos => {
+    locating = false; askLocation = false; endWelcome();
     const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
     state.lastFix = { p, acc, t: Date.now() };
     store.set('lastPos', p);
     setGps('gps-ok', 'GPS ±' + acc + ' m');
     updateMeMarker(p, acc, null);
     if (state.mode === 'plan' && (!state.start || state.start.mode === 'gps' || opts.force)) setStart(p, 'gps', acc);
+    renderGo();
     if (opts.centre || state.mode === 'plan') map.setView(p, Math.max(map.getZoom(), 15), { animate: false });
   }, err => {
     const msg = err.code === 1 ? 'Location blocked — allow it in your browser settings, or long-press the map to set a start.'
       : err.code === 3 ? 'GPS timed out — try again outside, or long-press the map to set a start.'
       : 'No location yet — long-press the map to set a start.';
     setGps('gps-bad', err.code === 1 ? 'Location blocked' : 'No location');
+    locating = false; askLocation = true; renderGo();
     toast(msg, 6000);
   }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 20000 });
 }
@@ -1814,7 +1938,7 @@ function pickMenu(p, isVia) {   // isVia: index of an existing pin, or null for 
   box.querySelectorAll('button').forEach(b => b.addEventListener('click', ev => {
     ev.stopPropagation(); map.closePopup(pickPopup);
     const act = b.dataset.act;
-    if (act === 'start') { setStart(p, 'manual'); toast('Start moved to the pin'); }
+    if (act === 'start') { askLocation = false; endWelcome(); setStart(p, 'manual'); toast('Start moved to the pin'); }
     else if (act === 'via') { addVia(p); toast(state.vias.length === 1 ? 'The loop will go via your pin' : 'The loop will go via all ' + state.vias.length + ' pins'); }
     else if (act === 'unvia') { removeVia(isVia); }
   }));
@@ -1870,7 +1994,6 @@ el.btnLayer.addEventListener('click', () => {
   layers[layerName].addTo(map); store.set('layer', layerName);
   renderCredit();
   toast(layerName === 'topo' ? 'Topographic map' : 'Street map');
-  if (state.route) cacheForOffline(state.route);
 });
 function renderCredit() {
   el.creditBar.innerHTML = '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' + (layerName === 'topo' ? ', SRTM | © <a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a> (CC-BY-SA)' : ' contributors');
@@ -1884,7 +2007,6 @@ async function makeLoop(seed) {
   if (state.vias.length && !viaFits()) return;
   state.busy = true;
   const targetM = state.targetKm * 1000;
-  const label = el.btnGo.innerHTML;
   el.btnGo.disabled = true; el.btnShuffle.disabled = true;
   el.btnGo.innerHTML = '<span class="spinner"></span> Finding paths…';
   el.btnShuffle.innerHTML = '<span class="spinner"></span> Shuffling';
@@ -1932,8 +2054,7 @@ async function makeLoop(seed) {
       diag.last = 'Last ' + state.theme + ' search: Wikipedia ' + (diag.wiki || 'n/a') + ' · Places ' + (diag.places || 'n/a') + ' · Routing ' + (diag.routing || 'ok') + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s' + (diag.error ? ' · ' + diag.error : '');
       store.set('diag', diag.last); renderDiag();
     }
-    state.busy = false;
-    el.btnGo.innerHTML = label; el.btnGo.disabled = !state.start;
+    state.busy = false; renderGo();
     el.btnShuffle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg>Shuffle';
     el.btnShuffle.disabled = false;
   }
@@ -1962,6 +2083,9 @@ function adoptRoute(route) {
   exitEdit(); editBase = null; editHistory = [];
   sheetCollapsed = true; el.sheet.classList.add('collapsed');   // tucked away by default: swipe up or tap the handle for stops, profile and hints
   profileFromEles(route);
+  // The router's turn list is pinned to the finished line here. A loop that came without one (a shared link) has no cues.
+  if (route.turns) route.cues = buildCues(route.coords, route.cum, route.turns);
+  delete route.turns;
   state.route = route;
   if (!route.shared) store.set('loops', Number(store.get('loops', 0)) + 1);
   drawRoute(route); showView('route'); renderRouteStats(); fitRoute(route);
@@ -1971,7 +2095,7 @@ function adoptRoute(route) {
   cacheForOffline(route);
 }
 function serializeRoute(r) {
-  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null, vias: r.vias && r.vias.length ? r.vias : null, wps: r.wps || null, edited: !!r.edited, replanned: !!r.replanned };
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null, vias: r.vias && r.vias.length ? r.vias : null, wps: r.wps || null, cues: r.cues || null, edited: !!r.edited, replanned: !!r.replanned };
 }
 // "Skip this stop" from the card: swap it for the next best candidate and re-route, keeping the other stops.
 async function skipStop(i) {
@@ -2094,20 +2218,29 @@ async function loadElevation(route) {
     store.set('route', serializeRoute(route));
     renderRouteStats();
   } catch (e) {
-    if (state.route === route) { el.stAsc.textContent = 'n/a'; el.routeHint.textContent = 'Elevation unavailable right now (no signal?). Everything else still works.'; renderProfile(null); }
+    if (state.route === route) { el.stAsc.textContent = 'n/a'; setRouteHint('Elevation unavailable right now (no signal?). Everything else still works.'); renderProfile(null); }
   }
 }
+// The stop count (and whether the loop was shared) heads the route sheet. With stops it is a button: tap to open the
+// list, tap again to tuck it away; the little arrow shows which way it will go.
+function renderEyebrow() {
+  const r = state.route; if (!r) return;
+  const n = r.stops ? r.stops.length : 0;
+  el.routeEyebrow.textContent = (r.shared ? 'Shared' : '') + (n ? (r.shared ? ' · ' : '') + n + (n === 1 ? ' stop' : ' stops') + (sheetCollapsed ? ' ▴' : ' ▾') : '');
+  el.routeEyebrow.disabled = !n;
+  el.routeEyebrow.setAttribute('aria-expanded', String(!sheetCollapsed));
+}
+// The line under the route buttons only takes up room when it has something to say.
+function setRouteHint(text) { el.routeHint.textContent = text; el.routeHint.hidden = !text || editMode; }
 function renderRouteStats() {
   const r = state.route; if (!r) return;
-  renderNudge();
-  // Just the stop count (and whether it was shared): short enough to share the line with the links, whatever the walk type.
-  el.routeEyebrow.textContent = (r.shared ? 'Shared' : '') + (r.stops && r.stops.length ? (r.shared ? ' · ' : '') + r.stops.length + (r.stops.length === 1 ? ' stop' : ' stops') : '');
+  renderEyebrow();
   renderStopsList();
   el.stDist.textContent = fmtKm(r.total) + ' km';
   el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
   el.stTime.textContent = '~' + fmtTime(estimateMinutes(r.total, r.ascent || 0));
-  const tag = r.shared ? 'Sent to you. It starts at the S pin, so head there first. ' : r.mode === 'green' ? 'Green routing. ' : r.mode === 'ors' ? 'Trail routing. ' : '';
-  el.routeHint.textContent = tag + (r.overlap > 0.3 ? 'Some of this loop doubles back on itself. Shuffle for a different shape.' : (r.err > 0.12 ? 'Closest loop the paths here allow; the length is ' + (r.total > state.targetKm * 1000 ? 'longer' : 'shorter') + ' than you asked for.' : ''));
+  const tag = r.shared ? 'Sent to you. It starts at the S pin, so head there first. ' : '';
+  setRouteHint(tag + (r.overlap > 0.3 ? 'Some of this loop doubles back on itself. Shuffle for a different shape.' : (r.err > 0.12 ? 'Closest loop the paths here allow; the length is ' + (r.total > state.targetKm * 1000 ? 'longer' : 'shorter') + ' than you asked for.' : '')));
   renderProfile(null);
 }
 function renderProfile(progress) {
@@ -2137,11 +2270,16 @@ function renderProfile(progress) {
   svg.innerHTML = out;
 }
 
-el.btnGo.addEventListener('click', () => makeLoop((Math.random() * 1e9) | 0));
+el.btnGo.addEventListener('click', () => {
+  if (!state.start) { if (askLocation && !locating) locateOnce({ centre: true, force: true }); return; }
+  makeLoop((Math.random() * 1e9) | 0);
+});
 el.btnShuffle.addEventListener('click', () => { if (state.route && state.route.edited && !shuffleWarned) { shuffleWarned = true; toast('Shuffle makes a fresh loop; your edits go with the old one.', 4000); } makeLoop((Math.random() * 1e9) | 0); });
 el.btnBack.addEventListener('click', () => {
   exitEdit(); showView('plan'); closeCard();
-  if (!state.start || state.start.mode === 'gps' || (state.route && state.route.shared)) locateOnce({ centre: true, force: true });
+  // Someone who arrived by a shared link and has never been asked for location: offer it, don't spring it.
+  if (welcome) { state.start = null; askLocation = true; renderGo(); renderPlanHint(); }
+  else if (!state.start || state.start.mode === 'gps' || (state.route && state.route.shared)) locateOnce({ centre: true, force: true });
   else map.setView(state.start.p, Math.max(map.getZoom(), 14), { animate: false });
 });
 
@@ -2167,9 +2305,21 @@ el.btnGpx.addEventListener('click', exportGpx);
 // ---------- Stop cards ----------
 const elC = { card: $('stopCard'), num: $('cardNum'), title: $('cardTitle'), desc: $('cardDesc'), close: $('cardClose'), img: $('cardImg'), text: $('cardText'), link: $('cardLink'), linkRow: $('linkRow'), prev: $('btnPrevStop'), next: $('btnNextStop'), skip: $('btnSkipStop'), skipRow: $('skipRow') };
 let cardIdx = -1;
+// Arriving at a stop on a walk: a slim banner under the top bar rather than the full card, so the map stays in view.
+// Tap it for the story; it goes when tapped, closed, or when the next stop arrives.
+const elA = { box: $('arrive'), open: $('arriveOpen'), num: $('arriveNum'), title: $('arriveTitle'), close: $('arriveClose') };
+let arriveIdx = -1;
+function showArrive(i) {
+  const r = state.route; if (!r || !r.stops || !r.stops[i]) return;
+  arriveIdx = i; elA.num.textContent = i + 1; elA.title.textContent = r.stops[i].title; elA.box.hidden = false;
+}
+function hideArrive() { elA.box.hidden = true; arriveIdx = -1; }
+elA.open.addEventListener('click', () => { const i = arriveIdx; hideArrive(); if (i >= 0) openCard(i); });
+elA.close.addEventListener('click', hideArrive);
 function openCard(i) {
   const r = state.route; if (!r || !r.stops || !r.stops[i]) return;
   const s = r.stops[i]; cardIdx = i;
+  if (arriveIdx === i) hideArrive();
   elC.num.textContent = i + 1; elC.title.textContent = s.title; elC.desc.textContent = s.desc || '';
   if (s.thumb) { elC.img.src = s.thumb; elC.img.hidden = false; } else { elC.img.hidden = true; elC.img.removeAttribute('src'); }
   elC.text.textContent = s.extract || s.osmText || (s.extract === null ? 'Loading the summary…' : '');
@@ -2177,7 +2327,8 @@ function openCard(i) {
   // Only a Wikipedia link earns a button; map-database links were clutter.
   const wikiLink = s.url && s.url !== '#' && /wikipedia\.org/.test(s.url);
   elC.link.href = wikiLink ? s.url : '#'; elC.linkRow.hidden = !wikiLink;
-  $('cardCredit').textContent = s.pageid || s.wiki ? 'Text and photo from Wikipedia (CC BY-SA).' : 'Details from OpenStreetMap contributors (ODbL).';
+  const fromWiki = !!(s.pageid || s.wiki), viaGeo = /^(osm|gp):/.test(s.id || '');
+  $('cardCredit').textContent = fromWiki ? 'Text and photo from Wikipedia (CC BY-SA).' + (viaGeo ? ' Place found via Geoapify.' : '') : 'Details from OpenStreetMap contributors (ODbL)' + (viaGeo ? ', via Geoapify.' : '.');
   elC.prev.disabled = i === 0; elC.next.disabled = i === r.stops.length - 1;
   elC.skipRow.hidden = !(state.mode === 'route' && r.pool && r.targetM && !r.shared);
   elC.card.hidden = false; elC.card.scrollTop = 0;
@@ -2196,7 +2347,7 @@ function checkStops(p) {
     if (haversine(p, [s.lat, s.lon]) < Math.max(45, (s.gap || 0) + 30)) {
       s.visited = true;
       if (stopMarkers[i]) stopMarkers[i].setIcon(stopIcon(i + 1, true));
-      buzz([120, 60, 120]); beep(1); openCard(i); renderStopsList();
+      buzz([120, 60, 120]); beep(1); showArrive(i); renderStopsList();
       store.set('route', serializeRoute(r));
     }
   });
@@ -2248,7 +2399,7 @@ function startWalk(resume) {
   state.walk = { proj, xy: r.coords.map(proj), progress: saved ? saved.progress : 0, lastIdx: 0, offCount: 0, onCount: 0, off: false, startedAt: saved ? saved.startedAt : Date.now(), finished: false };
   if (!resume && r.stops) { r.stops.forEach(s => { s.visited = false; }); drawStops(r); store.set('route', serializeRoute(r)); }
   state.following = true; el.btnRecentre.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; sheetCollapsed = true; el.sheet.classList.add('collapsed');
-  closeCard();
+  closeCard(); hideArrive();
   unlockAudio(); keepAwake(true); compassRequest();
   showView('walk'); updateWalkUi(null); renderNextStop(state.walk.progress);
   rot.auto = true; rot.northUp = false; renderCompass(); applyHeading(true);
@@ -2264,19 +2415,53 @@ function startWalk(resume) {
 function stopWalk() {
   if (state.watchId != null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
   keepAwake(false); store.del('walk'); state.walk = null;
-  el.banner.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; closeCard();
+  el.banner.hidden = true; el.btnReplan.hidden = true; el.doneWrap.hidden = true; replanUndo = null; closeCard(); hideArrive();
   if (doneLine && restLine && state.route) { doneLine.setLatLngs([]); restLine.setLatLngs(state.route.coords); }
   rot.auto = false; rot.northUp = false; sheetCollapsed = true; el.sheet.classList.add('collapsed');
   showView('route'); renderRouteStats(); fitRoute(state.route); renderCompass();
   el.btnStart.textContent = 'Start walking'; el.btnStart.dataset.resume = '0';
 }
-function setStatus(kind, text) { el.statusPill.className = 'status-pill' + (kind === 'off' ? ' off' : ''); el.statusText.textContent = text; }
+// The pill at the top of the walk sheet. On route it carries the next turn: an arrow, how far, and the street when it has
+// a name. With no turn list (a loop from a shared link) or no turns left it says "On route"; off route it turns red.
+const CUE_ICON = {   // drawn turning right; the left-hand ones are the same picture mirrored
+  turn: '<svg viewBox="0 0 24 24"><path d="M7 20v-8a4 4 0 0 1 4-4h7"/><path d="M14 4l4 4-4 4"/></svg>',
+  slight: '<svg viewBox="0 0 24 24"><path d="M8 20v-7l8-8"/><path d="M10 5h6v6"/></svg>',
+  sharp: '<svg viewBox="0 0 24 24"><path d="M7 20V6l9 9"/><path d="M16 9v6h-6"/></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M7 20V10a5 5 0 0 1 10 0v7"/><path d="M13 13l4 4 4-4"/></svg>',
+  round: '<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="5"/><path d="M12 22v-4"/><path d="M12 8V2"/><path d="M9 5l3-3 3 3"/></svg>'
+};
+const CUE_WORD = { 0: 'Left', 1: 'Right', 2: 'Sharp left', 3: 'Sharp right', 4: 'Slight left', 5: 'Slight right', 7: 'Roundabout', 9: 'Turn back', 12: 'Keep left', 13: 'Keep right' };
+// The next turn still ahead (one counts as passed ten metres beyond it).
+function nextCue(r, progress) {
+  const cs = r && r.cues; if (!cs) return null;
+  for (const c of cs) if (c.at + 10 >= progress) return c;
+  return null;
+}
+function cueView(c, progress) {
+  const d = c.at - progress, now = d <= 15;
+  const dist = now ? 'Now' : d < 1000 ? Math.max(20, Math.round(d / 10) * 10) + ' m' : fmtKm(d) + ' km';
+  const kind = c.t === 9 ? 'back' : c.t === 7 ? 'round' : (c.t === 2 || c.t === 3) ? 'sharp' : (c.t === 4 || c.t === 5 || c.t === 12 || c.t === 13) ? 'slight' : 'turn';
+  const word = c.t === 9 ? 'Turn back' : c.t === 7 ? 'Roundabout' + (c.x ? ', exit ' + c.x : '') : c.t === 12 ? 'Keep left' : c.t === 13 ? 'Keep right' : '';
+  const bits = [dist]; if (word) bits.push(word); if (c.n) bits.push(c.n);
+  return { key: kind + (c.t % 2 ? 'R' : 'L'), kind, flip: kind !== 'back' && kind !== 'round' && c.t % 2 === 0, text: bits.join(' · '),
+    label: (CUE_WORD[c.t] || 'Turn') + (now ? ' now' : ' in ' + dist) + (c.n ? ', ' + c.n : '') };
+}
+function setStatus(kind, text, cue) {
+  el.statusPill.className = 'status-pill' + (kind === 'off' ? ' off' : '') + (cue ? ' cue' : '');
+  el.statusText.textContent = cue ? cue.text : text;
+  el.statusDot.hidden = !!cue; el.statusIcon.hidden = !cue;
+  if (cue) {
+    if (el.statusIcon.dataset.key !== cue.key) { el.statusIcon.innerHTML = CUE_ICON[cue.kind]; el.statusIcon.classList.toggle('flip', cue.flip); el.statusIcon.dataset.key = cue.key; }
+    el.statusPill.setAttribute('aria-label', cue.label);
+  } else el.statusPill.removeAttribute('aria-label');
+}
 
 function onFix(pos) {
   const w = state.walk, r = state.route; if (!w || !r) return;
   const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
   state.lastFix = { p, acc, t: Date.now() }; store.set('lastPos', p);
   setGps('gps-ok', 'GPS ±' + acc + ' m');
+  if (welcome) { askLocation = false; endWelcome(); }
   const speed = pos.coords.speed, hd = pos.coords.heading;
   if (hd != null && !isNaN(hd) && (speed == null || speed > 0.4)) state.lastHeading = hd;
   updateMeMarker(p, acc, currentHeading());
@@ -2296,7 +2481,10 @@ function onFix(pos) {
     if (prog >= w.progress - 150) { w.progress = Math.max(w.progress, prog); w.lastIdx = near.idx; }
     w.onCount++; w.offCount = 0; el.btnReplan.hidden = true;
     if (w.off && w.onCount >= 2) { w.off = false; el.banner.hidden = true; buzz(80); }
-    if (!w.off) setStatus('ok', w.finished ? (r.stops && r.stops.length ? 'Tour complete' : 'Loop complete') : 'On route');
+    if (!w.off) {
+      if (w.finished) setStatus('ok', r.stops && r.stops.length ? 'Tour complete' : 'Loop complete');
+      else { const c = nextCue(r, w.progress); setStatus('ok', 'On route', c ? cueView(c, w.progress) : null); }
+    }
     const cut = pointAt(r.coords, cum, w.progress);
     doneLine.setLatLngs(r.coords.slice(0, w.lastIdx + 1).concat([cut]));
     restLine.setLatLngs([cut].concat(r.coords.slice(w.lastIdx + 1)));
@@ -2331,15 +2519,71 @@ function updateWalkUi(progress) {
   const mins = estimateMinutes(left, ascLeft), elapsed = Math.round((Date.now() - w.startedAt) / 60000);
   el.wEta.textContent = '~' + fmtTime(mins) + ' left · ' + fmtTime(elapsed) + ' so far';
 }
-// End of the walk: one card, one tap to close; the finished loop stays on screen underneath.
+// End of the walk: one card with the loop's own shape, the numbers, Share, Close and a quiet coffee link. The finished
+// loop stays on screen underneath. The share picture is drawn as the card opens, so the Share tap can hand it straight
+// to the phone's share menu (phones only allow that directly from a tap).
+const SITE = /^https?:$/.test(location.protocol) ? (location.host + location.pathname).replace(/\/[^\/]*\.html$/, '').replace(/\/$/, '') : 'charliebonk.github.io/Round-here';
+let shareFile = null;   // null while drawing, false if this browser couldn't draw it
 function showDone(r, w) {
-  const mins = Math.round((Date.now() - w.startedAt) / 60000), bits = [fmtKm(r.total) + ' km', fmtTime(mins)];
+  const mins = Math.round((Date.now() - w.startedAt) / 60000), tour = !!(r.stops && r.stops.length);
+  const bits = [fmtKm(r.total) + ' km', fmtTime(mins)];
   if (r.ascent != null) bits.push('↑ ' + r.ascent + ' m');
-  if (r.stops && r.stops.length) bits.push(r.stops.filter(s => s.visited).length + ' of ' + r.stops.length + ' stops');
-  el.doneTitle.textContent = r.stops && r.stops.length ? 'Tour complete' : 'Loop complete';
+  if (tour) bits.push(r.stops.filter(s => s.visited).length + ' of ' + r.stops.length + ' stops');
+  el.doneTitle.textContent = tour ? 'Tour complete' : 'Loop complete';
   el.doneText.textContent = bits.join(' · ');
+  const sh = fitShape(simplify(r.coords, Math.max(4, r.total / 400)), 120, 120, 10), s0 = sh.pts[0];
+  $('doneLoop').innerHTML = '<path d="M' + sh.pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L') + '"/><circle cx="' + s0[0].toFixed(1) + '" cy="' + s0[1].toFixed(1) + '" r="6"/>';
   el.doneWrap.hidden = false;
+  shareFile = null;
+  sharePicture(r, { title: tour ? 'Tour complete' : 'Loop complete', km: fmtKm(r.total), sub: bits.slice(1).join(' · ') })
+    .then(f => { shareFile = f || false; }).catch(() => { shareFile = false; });
 }
+// The picture: the loop's shape on a plain green card with the numbers, the name and the web address. No map behind it,
+// which keeps it clean and means it doesn't show where the walk was.
+async function sharePicture(r, info) {
+  const W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); if (!g) return null;
+  const font = '"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif';
+  try { if (document.fonts && document.fonts.load) await Promise.race([document.fonts.load('800 60px "Bricolage Grotesque"'), new Promise(res => setTimeout(res, 1500))]); } catch (e) {}
+  const green = '#1E5B3C', pink = '#FF4FA5', paper = '#EEF1EC', soft = 'rgba(238,241,236,.72)';
+  const spaced = v => { try { g.letterSpacing = v; } catch (e) {} };
+  g.fillStyle = green; g.fillRect(0, 0, W, H);
+  // Name, top left (with the app's dot); the date, top right.
+  g.textBaseline = 'middle';
+  g.fillStyle = pink; g.beginPath(); g.arc(98, 112, 13, 0, 7); g.fill();
+  g.strokeStyle = pink; g.lineWidth = 3; g.beginPath(); g.arc(98, 112, 21, 0, 7); g.stroke();
+  g.fillStyle = paper; g.font = '800 46px ' + font; g.textAlign = 'left'; g.fillText('Round Here', 136, 114);
+  g.fillStyle = soft; g.font = '600 32px ' + font; g.textAlign = 'right';
+  g.fillText(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }), W - 80, 114);
+  // The loop, with its stops and its start.
+  const bx = 130, by = 220, sh = fitShape(simplify(r.coords, Math.max(3, r.total / 600)), W - 2 * bx, 620, 0);
+  g.lineJoin = 'round'; g.lineCap = 'round'; g.strokeStyle = pink; g.lineWidth = 12;
+  g.beginPath(); sh.pts.forEach((p, i) => { if (i) g.lineTo(bx + p[0], by + p[1]); else g.moveTo(bx + p[0], by + p[1]); }); g.stroke();
+  const dot = (p, outer, inner, cOut, cIn) => { g.fillStyle = cOut; g.beginPath(); g.arc(bx + p[0], by + p[1], outer, 0, 7); g.fill(); g.fillStyle = cIn; g.beginPath(); g.arc(bx + p[0], by + p[1], inner, 0, 7); g.fill(); };
+  (r.stops || []).forEach(s => dot(sh.place([s.lat, s.lon]), 15, 9, green, paper));
+  dot(sh.pts[0], 22, 14, green, paper);
+  // The numbers.
+  g.textAlign = 'left'; g.fillStyle = soft; g.font = '700 30px ' + font; spaced('4px');
+  g.fillText(info.title.toUpperCase(), 80, 960); spaced('0px');
+  g.textBaseline = 'alphabetic'; g.fillStyle = paper; g.font = '800 170px ' + font; g.fillText(info.km, 72, 1128);
+  const kmW = g.measureText(info.km).width;
+  g.fillStyle = soft; g.font = '700 64px ' + font; g.fillText('km', 72 + kmW + 20, 1128);
+  g.fillStyle = paper; g.font = '600 44px ' + font; g.fillText(info.sub, 80, 1198);
+  g.fillStyle = soft; g.font = '600 32px ' + font; g.fillText(SITE, 80, 1284);
+  return new Promise(res => { try { cv.toBlob(b => res(b ? new File([b], 'round-here-walk.png', { type: 'image/png' }) : null), 'image/png'); } catch (e) { res(null); } });
+}
+el.doneShare.addEventListener('click', async () => {
+  const f = shareFile;
+  if (f === null) { toast('Still drawing the picture. Give it a second and tap again.'); return; }
+  if (!f) { toast('Could not make the picture on this browser.'); return; }
+  try { if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'Round Here' }); return; } }
+  catch (e) { if (e && e.name === 'AbortError') return; }
+  try {
+    const url = URL.createObjectURL(f), a = document.createElement('a'); a.href = url; a.download = f.name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+    toast('Picture saved. Share it from your photos or downloads.');
+  } catch (e) { toast('Could not share the picture on this browser.'); }
+});
 el.doneClose.addEventListener('click', () => { el.doneWrap.hidden = true; });
 el.doneWrap.addEventListener('click', e => { if (e.target === el.doneWrap) el.doneWrap.hidden = true; });
 
@@ -2380,7 +2624,7 @@ async function replanFromHere() {
   }
 }
 function applyReplan(r, w, leaveM, P, leg) {
-  replanUndo = { coords: r.coords, cum: r.cum, total: r.total, stops: r.stops ? r.stops.map(s => Object.assign({}, s)) : null, profile: r.profile, ascent: r.ascent, descent: r.descent, progress: w.progress, lastIdx: w.lastIdx };
+  replanUndo = { coords: r.coords, cum: r.cum, total: r.total, stops: r.stops ? r.stops.map(s => Object.assign({}, s)) : null, profile: r.profile, ascent: r.ascent, descent: r.descent, cues: r.cues || null, progress: w.progress, lastIdx: w.lastIdx };
   // The old route up to where you left it, a straight join to where you stand, then the new leg.
   let cut = 0; while (cut < r.cum.length - 1 && r.cum[cut + 1] <= leaveM) cut++;
   const coords = r.coords.slice(0, cut + 1).concat([pointAt(r.coords, r.cum, leaveM), P], leg.coords);
@@ -2398,10 +2642,13 @@ function applyReplan(r, w, leaveM, P, leg) {
     r.stops.sort((a, b) => (a.at || 0) - (b.at || 0));
   }
   const pIdx = cut + 2;
+  // Turns already behind you stay as they were; the new leg brings its own, looked for from where you stand onwards.
+  // (The straight join to where you stand isn't a real corner, so nothing counts within a few steps of it.)
+  r.cues = (replanUndo.cues || []).filter(c => c.at <= leaveM).concat(buildCues(r.coords, r.cum, leg.turns, pIdx).filter(c => c.at > r.cum[pIdx] + 12));
   w.proj = localProjector(r.coords[0]); w.xy = r.coords.map(w.proj);
   w.lastIdx = pIdx; w.progress = r.cum[pIdx];
   w.off = false; w.offCount = 0; w.onCount = 0;
-  el.banner.hidden = true; el.btnReplan.hidden = true; setStatus('ok', 'On route');
+  el.banner.hidden = true; el.btnReplan.hidden = true; setStatus('ok', 'On route'); hideArrive();
   drawRoute(r); renderStopsList(); renderNextStop(w.progress); updateWalkUi(w.progress);
   doneLine.setLatLngs(r.coords.slice(0, pIdx + 1)); restLine.setLatLngs(r.coords.slice(pIdx));
   store.set('route', serializeRoute(r)); store.set('walk', { active: true, progress: w.progress, startedAt: w.startedAt });
@@ -2410,7 +2657,8 @@ function applyReplan(r, w, leaveM, P, leg) {
 }
 function undoReplan() {
   const r = state.route, w = state.walk, u = replanUndo; if (!r || !u) return; replanUndo = null;
-  Object.assign(r, { coords: u.coords, cum: u.cum, total: u.total, stops: u.stops, profile: u.profile, ascent: u.ascent, descent: u.descent, replanned: false });
+  Object.assign(r, { coords: u.coords, cum: u.cum, total: u.total, stops: u.stops, profile: u.profile, ascent: u.ascent, descent: u.descent, cues: u.cues, replanned: false });
+  hideArrive();
   drawRoute(r); renderStopsList();
   if (w) {
     w.proj = localProjector(r.coords[0]); w.xy = r.coords.map(w.proj); w.progress = u.progress; w.lastIdx = u.lastIdx;
@@ -2435,7 +2683,7 @@ const collapsible = () => state.mode === 'route' || state.mode === 'walk';
 function setCollapsed(on) {
   if (!collapsible()) on = false;
   if (sheetCollapsed === on) return;
-  sheetCollapsed = on; el.sheet.classList.toggle('collapsed', on); closeCard();
+  sheetCollapsed = on; el.sheet.classList.toggle('collapsed', on); closeCard(); renderEyebrow();
   requestAnimationFrame(() => { setSheetHeight(); if (state.route && state.mode === 'route') fitRoute(state.route); });
 }
 el.sheet.addEventListener('touchstart', e => {
@@ -2449,6 +2697,7 @@ el.sheet.addEventListener('touchmove', e => {
 }, { passive: true });
 el.sheet.addEventListener('touchend', () => { sheetTouch = null; }, { passive: true });
 el.sheet.querySelector('.grip').addEventListener('click', () => { if (collapsible()) setCollapsed(!sheetCollapsed); });
+el.routeEyebrow.addEventListener('click', () => { if (collapsible()) setCollapsed(!sheetCollapsed); });
 
 const mapEl = $('map');
 // ---------- Edit loop: touch the line, drag it onto another street, let go ----------
@@ -2465,7 +2714,7 @@ function enterEdit() {
   const r = state.route; if (!r || state.mode !== 'route' || editMode || state.busy) return;
   editMode = true; if (!editBase) editBase = serializeRoute(r); r.wps = routeWaypoints(r);
   closeCard(); snapNorth(); renderUndo();
-  el.routeActions.hidden = true; el.editBar.hidden = false; el.routeHint.hidden = true; elN.box.hidden = true; el.btnBack.hidden = true;   // Done is the way out while editing; keeps the line short
+  el.routeActions.hidden = true; el.editBar.hidden = false; el.routeHint.hidden = true; el.btnBack.hidden = true;   // Done is the way out while editing; keeps the line short
   el.editHint.textContent = EDIT_HINT; el.btnEdit.textContent = 'Editing…'; el.btnEdit.disabled = true;
   requestAnimationFrame(setSheetHeight);
 }
@@ -2546,6 +2795,7 @@ async function applyEdit(g) {
     r.profile = null; r.ascent = null; r.descent = null;
     if (r.eles) profileFromEles(r); else loadElevation(r);
     relocateStops(r);
+    r.cues = res.turns ? buildCues(r.coords, r.cum, res.turns) : null;
     drawRoute(r); renderRouteStats(); store.set('route', serializeRoute(r)); renderUndo();
   } catch (e) {
     toast(e.kind === 'noroute' ? 'No path through there on foot. Try a spot on a street or footpath.' : (e.message || 'Could not re-route.'), 5000);
@@ -2677,7 +2927,9 @@ window.addEventListener('resize', () => { document.documentElement.style.setProp
 
 // ---------- Offline ----------
 // The service worker is registered at the top of this script. The route and its card text are already in localStorage,
-// so a loop made with signal opens and follows without it; what is asked for here is the map around it and the photos.
+// so a loop made with signal opens and follows without it. Map squares are kept only once the map has shown them (the
+// map servers' rules don't allow fetching them ahead of time), and the service worker fills any gap with a stretched
+// copy of a saved zoomed-out square. All that is asked for here is the handful of stop photos.
 let offlineTimer = null;
 function cacheForOffline(route) {
   if (!route || !route.coords || !route.coords.length) return;
@@ -2685,8 +2937,9 @@ function cacheForOffline(route) {
   // A few seconds' pause so a run of shuffles only saves the loop that was kept.
   offlineTimer = setTimeout(() => {
     if (state.route !== route || navigator.onLine === false || !('serviceWorker' in navigator)) return;
-    const urls = routeTiles(route.coords, layerName);
+    const urls = [];
     (route.stops || []).forEach(s => { if (s.thumb) urls.push(s.thumb); });
+    if (!urls.length) return;
     navigator.serviceWorker.ready.then(reg => { const w = navigator.serviceWorker.controller || reg.active; if (w) w.postMessage({ type: 'prefetch', urls }); }).catch(() => {});
   }, 4000);
 }
@@ -2696,7 +2949,7 @@ function renderOnline() {
   el.brand.classList.toggle('off', off);
 }
 window.addEventListener('online', renderOnline);
-window.addEventListener('offline', () => { renderOnline(); toast('No signal. Your saved loop, map and cards still work; a new loop needs signal.', 5000); });
+window.addEventListener('offline', () => { renderOnline(); toast('No signal. Your saved loop and cards still work, and the map wherever you\'ve looked. A new loop needs signal.', 6000); });
 renderOnline();
 
 // ---------- Boot ----------
@@ -2723,7 +2976,7 @@ setSheetHeight();
     setStart(savedRoute.coords[0], savedRoute.startMode || 'manual');
     if (savedRoute.vias && savedRoute.vias.length && !savedRoute.shared) { state.vias = savedRoute.vias.slice(); drawVias(); }
     showView('route'); renderRouteStats(); fitRoute(savedRoute);
-    if (!shared && savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; el.routeHint.textContent = 'You were mid-walk on this ' + (savedRoute.stops ? 'tour.' : 'loop.'); }
+    if (!shared && savedWalk && savedWalk.active) { el.btnStart.textContent = 'Resume walk'; el.btnStart.dataset.resume = '1'; setRouteHint('You were mid-walk on this ' + (savedRoute.stops ? 'tour.' : 'loop.')); }
     else { el.btnStart.dataset.resume = '0'; }
     if (!savedRoute.profile) loadElevation(savedRoute);
     if (savedRoute.stops && savedRoute.stops.some(s => s.extract === null)) loadExtracts(savedRoute);
@@ -2733,7 +2986,8 @@ setSheetHeight();
     showView('plan');
   }
   renderKind();
-  locateOnce({ centre: !savedRoute });
+  // First visit: no location pop-up until it is asked for (the main button, the locate button or starting a walk).
+  if (welcome) setGps('', 'Location off'); else locateOnce({ centre: !savedRoute });
 })();
 })();
 </script>

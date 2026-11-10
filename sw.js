@@ -1,10 +1,13 @@
-/* Round Here service worker v1.0
-   Keeps the app, the map around the current loop and the stop photos on the phone,
+/* Round Here service worker v1.1
+   Keeps the app, the map squares you have already looked at and the stop photos on the phone,
    so a loop made with signal still opens and follows without it.
+   Map squares are never fetched ahead of time: the map servers' rules don't allow it. A square is kept only once the
+   map has shown it. Without signal, a square that was never shown is filled with a stretched copy of a saved
+   zoomed-out square covering the same ground, so the map goes soft rather than blank. Nothing is fetched for that.
    Routing, places and Wikipedia text are never cached here: they go straight to the network. */
-const VERSION = 'rh-sw-1.0';
+const VERSION = 'rh-sw-1.1';
 const SHELL = VERSION + '-shell';   // the app page, Leaflet, fonts
-const TILES = VERSION + '-tiles';   // map squares
+const TILES = VERSION + '-tiles';   // map squares the map has shown
 const MEDIA = VERSION + '-media';   // stop photos
 const HTML_URL = new URL('./round-here.html', self.location.href).href;
 const PRECACHE = [
@@ -13,7 +16,7 @@ const PRECACHE = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap'
 ];
-const MAX_TILES = 1200, MAX_MEDIA = 300, PREFETCH_MAX = 800, PREFETCH_PARALLEL = 4, NET_TIMEOUT = 6000;
+const MAX_TILES = 1200, MAX_MEDIA = 300, PREFETCH_MAX = 40, PREFETCH_PARALLEL = 4, NET_TIMEOUT = 6000, SOFT_LEVELS = 5;
 const TILE_HOSTS = /(^|\.)tile\.(openstreetmap|opentopomap)\.org$/;
 const SHELL_HOSTS = /^(unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)$/;
 const MEDIA_HOSTS = /^upload\.wikimedia\.org$/;
@@ -40,7 +43,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   let url; try { url = new URL(req.url); } catch (err) { return; }
   if (url.origin === self.location.origin) { e.respondWith(networkFirst(req, url)); return; }
-  if (TILE_HOSTS.test(url.hostname)) { e.respondWith(cacheFirst(req, TILES, MAX_TILES, blankTile)); return; }
+  if (TILE_HOSTS.test(url.hostname)) { e.respondWith(cacheFirst(req, TILES, MAX_TILES, softTile)); return; }
   if (SHELL_HOSTS.test(url.hostname)) { e.respondWith(cacheFirst(req, SHELL, 0, null)); return; }
   if (MEDIA_HOSTS.test(url.hostname)) { e.respondWith(cacheFirst(req, MEDIA, MAX_MEDIA, null)); return; }
   // Anything else (routing, places, Wikipedia text, elevation): the network, untouched.
@@ -84,7 +87,7 @@ async function cacheFirst(req, name, max, fallback) {
     }
     return res;
   } catch (err) {
-    return fallback ? fallback() : Response.error();
+    return fallback ? fallback(req) : Response.error();
   }
 }
 
@@ -110,10 +113,11 @@ async function store(c, url, res, max) {
   catch (err) { await trim(c, Math.max(50, Math.floor((max || 200) / 2))); await c.put(url, copy); }
 }
 
-// Save a list of tiles and photos the page asked for (the squares around a new loop), a few at a time.
+// Save the stop photos the page asked for (a handful per tour), a few at a time. Only photos: anything else in the
+// list, map squares included, is ignored, so no page (not even an old saved copy of it) can fetch map squares ahead.
 async function prefetch(urls) {
-  const tiles = await caches.open(TILES), media = await caches.open(MEDIA);
-  const queue = urls.slice(0, PREFETCH_MAX);
+  const media = await caches.open(MEDIA);
+  const queue = urls.filter(u => { try { return MEDIA_HOSTS.test(new URL(u).hostname); } catch (err) { return false; } }).slice(0, PREFETCH_MAX);
   let active = 0;
   await new Promise(resolve => {
     const next = () => {
@@ -122,19 +126,17 @@ async function prefetch(urls) {
         const u = queue.shift(); active++;
         (async () => {
           try {
-            const host = new URL(u).hostname;
-            const c = TILE_HOSTS.test(host) ? tiles : MEDIA_HOSTS.test(host) ? media : null;
-            if (!c || await c.match(u)) return;
+            if (await media.match(u)) return;
             const res = await fetchForCache(null, u);
-            if (res && (res.ok || res.type === 'opaque')) await store(c, u, res, c === tiles ? MAX_TILES : MAX_MEDIA);
-          } catch (err) { /* no signal or a refused tile: skip it */ }
+            if (res && (res.ok || res.type === 'opaque')) await store(media, u, res, MAX_MEDIA);
+          } catch (err) { /* no signal or a refused photo: skip it */ }
           finally { active--; next(); }
         })();
       }
     };
     next();
   });
-  await trim(tiles, MAX_TILES); await trim(media, MAX_MEDIA);
+  await trim(media, MAX_MEDIA);
 }
 
 // Keep a cache to its size limit by dropping the oldest entries.
@@ -144,6 +146,38 @@ async function trim(c, max) {
     if (keys.length <= max) return;
     await Promise.all(keys.slice(0, keys.length - max).map(k => c.delete(k)));
   } catch (err) {}
+}
+
+// No signal, and this map square was never shown so it was never saved. Look through the saved squares for one from a
+// few zoom levels further out that covers the same ground, and stretch the matching part of it to fill the square.
+// Only what is already on the phone is used. If there is nothing, or the browser can't draw here, a plain square.
+async function softTile(req) {
+  try {
+    const u = new URL(req.url), m = /^\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(u.pathname);
+    if (!m || typeof OffscreenCanvas !== 'function' || typeof createImageBitmap !== 'function') return blankTile();
+    const z = +m[1], x = +m[2], y = +m[3];
+    const topo = /^[abc]\.(tile\.opentopomap\.org)$/.exec(u.hostname);   // that map is spread over three server names
+    const c = await caches.open(TILES);
+    for (let dz = 1; dz <= SOFT_LEVELS && z - dz >= 0; dz++) {
+      const n = Math.pow(2, dz), px = Math.floor(x / n), py = Math.floor(y / n), path = '/' + (z - dz) + '/' + px + '/' + py + '.png';
+      const hosts = topo ? ['abc'[Math.abs(px + py) % 3], 'a', 'b', 'c'].map(s => s + '.' + topo[1]) : [u.hostname];
+      let hit = null;
+      for (const h of hosts) {
+        const r = await c.match('https://' + h + path, { ignoreVary: true });
+        if (r && r.type !== 'opaque' && r.ok) { hit = r; break; }
+      }
+      if (!hit) continue;
+      const bmp = await createImageBitmap(await hit.blob());
+      const sw = bmp.width / n, sh = bmp.height / n;
+      const cv = new OffscreenCanvas(256, 256), g = cv.getContext('2d');
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+      g.drawImage(bmp, (x - px * n) * sw, (y - py * n) * sh, sw, sh, 0, 0, 256, 256);
+      if (bmp.close) bmp.close();
+      const blob = await cv.convertToBlob({ type: 'image/png' });
+      return new Response(blob, { status: 200, headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' } });
+    }
+  } catch (err) { /* fall through to the plain square */ }
+  return blankTile();
 }
 
 // A plain square for a map tile that was never saved and cannot be fetched, instead of a broken-image icon.
