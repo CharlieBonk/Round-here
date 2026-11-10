@@ -24,6 +24,7 @@
   --accent:#1E5B3C; --accent-fg:#FFFFFF; --accent-soft:#DDEDE3;
   --route:#D1237A; --route-done:#8C949A; --me:#1769E0;
   --ok:#1F7A4D; --ok-bg:#DFF1E6; --warn:#B4361C; --warn-bg:#FBE9E3;
+  --caution:#E08600; --caution-bg:#FFF0D2; --caution-fg:#7A4A00;
   --display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
   --body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   --radius:20px; --shadow:0 10px 30px rgba(16,24,18,.22);
@@ -34,7 +35,7 @@
     --bg:#121715; --panel:#1B221E; --panel-2:#222B26; --fg:#E7ECE6; --muted:#98A59C; --line:#2E3933;
     --accent:#4FB37A; --accent-fg:#0E1A12; --accent-soft:#1F3A2B;
     --route:#FF4FA5; --route-done:#6B7378; --me:#5FA3FF;
-    --ok:#5FCB8E; --ok-bg:#1D3527; --warn:#FF8A6A; --warn-bg:#3A1E16;
+    --ok:#5FCB8E; --ok-bg:#1D3527; --warn:#FF8A6A; --warn-bg:#3A1E16; --caution:#FFB020; --caution-bg:#3A2B0E; --caution-fg:#FFCB6B;
     --shadow:0 10px 30px rgba(0,0,0,.5);
   }
 }
@@ -43,7 +44,7 @@
   --bg:#121715; --panel:#1B221E; --panel-2:#222B26; --fg:#E7ECE6; --muted:#98A59C; --line:#2E3933;
   --accent:#4FB37A; --accent-fg:#0E1A12; --accent-soft:#1F3A2B;
   --route:#FF4FA5; --route-done:#6B7378; --me:#5FA3FF;
-  --ok:#5FCB8E; --ok-bg:#1D3527; --warn:#FF8A6A; --warn-bg:#3A1E16;
+  --ok:#5FCB8E; --ok-bg:#1D3527; --warn:#FF8A6A; --warn-bg:#3A1E16; --caution:#FFB020; --caution-bg:#3A2B0E; --caution-fg:#FFCB6B;
   --shadow:0 10px 30px rgba(0,0,0,.5);
 }
 *{box-sizing:border-box}
@@ -237,6 +238,9 @@ a.btn{text-decoration:none}
 .done-loop path{fill:none;stroke:var(--route);stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
 .done-loop circle{fill:var(--accent);stroke:var(--panel);stroke-width:3}
 .done-coffee{font-size:13px;font-weight:600;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:6px 8px}
+/* A stretch of main road on the loop: one line on the route sheet (tap it to see where), amber on the map */
+.road-note{display:flex;align-items:center;gap:9px;width:100%;border:0;border-radius:12px;background:var(--caution-bg);color:var(--caution-fg);padding:9px 12px;font-size:13px;line-height:1.3;font-weight:700;text-align:left;cursor:pointer}
+.road-note svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 /* About, behind the Round Here badge */
 .brand{cursor:pointer}
 .credits{margin:0;font-size:11px;line-height:1.5;color:var(--muted)}
@@ -312,7 +316,9 @@ a.btn{text-decoration:none}
       <a class="btn secondary coffee" id="aboutCoffee" href="https://ko-fi.com/charliebonk" target="_blank" rel="noopener">☕ Buy me a coffee</a>
       <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
       <p class="credits">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Routing © <a href="https://openrouteservice.org" target="_blank" rel="noopener">openrouteservice.org</a> by HeiGIT, backup by <a href="https://www.fossgis.de" target="_blank" rel="noopener">FOSSGIS</a> · Places powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a> · Elevation by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> · Stories and photos from <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA)</p>
-      <p class="tag" id="version">Round Here v7.0</p>
+      <p class="credits">Loops are worked out by computer from open map data and can be wrong. Check the route before you set off, and take care on roads.</p>
+      <p class="tag" id="version">Round Here v7.1</p>
+      <p class="credits" id="diag" hidden></p>
       <button class="btn primary" id="aboutClose">Close</button>
     </div>
   </div>
@@ -340,7 +346,7 @@ a.btn{text-decoration:none}
         <button data-theme="green">Green</button>
       </div>
       <div class="dist-row">
-        <div class="dist-col"><div class="big"><span id="distBig">8.0</span><small>km</small></div><div class="dist-time" id="distTime">about 1 h 45</div></div>
+        <div class="dist-col"><div class="big"><span id="distBig">8.0</span><small id="distUnit">km</small></div><div class="dist-time" id="distTime">about 1 h 45</div></div>
         <input type="range" id="distRange" min="2" max="30" step="0.5" value="8" aria-label="Distance in kilometres">
       </div>
       <div class="via-row" id="viaRow" hidden><span class="via-pin small">⚑</span><span class="t">The loop goes via your pin</span><button class="link" id="viaClear">Remove</button></div>
@@ -361,6 +367,7 @@ a.btn{text-decoration:none}
         <div class="stat"><div class="l">Ascent</div><div class="v" id="stAsc">—</div></div>
         <div class="stat"><div class="l">Est. time</div><div class="v" id="stTime">—</div></div>
       </div>
+      <button class="road-note" id="roadNote" type="button" hidden><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><span id="roadNoteText"></span></button>
       <div class="stops" id="stopsList" hidden></div>
       <svg class="profile" id="profile" aria-label="Elevation profile"></svg>
       <div class="edit-bar" id="editBar" hidden>
@@ -386,7 +393,7 @@ a.btn{text-decoration:none}
         <button class="link" id="btnRecentre" hidden>Re-centre</button>
       </div>
       <button class="next link" id="nextStop" hidden style="text-decoration:none;padding:0"></button>
-      <div class="walk-nums"><div><b id="wDone">0.0</b> <span>km done</span></div><div><span id="wLeft">— to go</span></div></div>
+      <div class="walk-nums"><div><b id="wDone">0.0</b> <span id="wUnit">km done</span></div><div><span id="wLeft">— to go</span></div></div>
       <div class="progress"><div id="progBar"></div></div>
       <div class="row between" id="walkFoot">
         <div class="progress-txt" id="wEta">—</div>
@@ -655,20 +662,20 @@ function findSpurs(coords, tol) {
   return out;
 }
 // Cut the given spurs out, joining the two base points (at most tol apart). eles, if given, is trimmed in step.
-function removeSpurs(coords, eles, spurs) {
-  if (!spurs || !spurs.length) return { coords, eles };
+function removeSpurs(coords, eles, spurs, extra) {   // extra: any other per-point list to trim the same way
+  if (!spurs || !spurs.length) return { coords, eles, extra: extra || null };
   const cum = cumulative(coords), drop = new Uint8Array(coords.length), insertAt = {};
   for (const sp of spurs) {
     for (let i = sp.iBase + 1; i <= sp.jBase - 1; i++) drop[i] = 1;
     insertAt[sp.iBase] = [pointAt(coords, cum, sp.baseD), pointAt(coords, cum, sp.retD)];
   }
-  const c2 = [], e2 = eles ? [] : null;
+  const c2 = [], e2 = eles ? [] : null, x2 = extra ? [] : null;
   for (let i = 0; i < coords.length; i++) {
     if (drop[i]) continue;
-    c2.push(coords[i]); if (e2) e2.push(eles[i]);
-    if (insertAt[i]) { for (const q of insertAt[i]) { c2.push(q); if (e2) e2.push(eles[i]); } }
+    c2.push(coords[i]); if (e2) e2.push(eles[i]); if (x2) x2.push(extra[i]);
+    if (insertAt[i]) { for (const q of insertAt[i]) { c2.push(q); if (e2) e2.push(eles[i]); if (x2) x2.push(extra[i]); } }
   }
-  return { coords: c2, eles: e2 };
+  return { coords: c2, eles: e2, extra: x2 };
 }
 // Share payload: a compact array form of the route and its stops.
 function packRoute(r) {
@@ -1010,11 +1017,11 @@ function acceptEdit(res, dropP, prevCoords, prevCum) {
   const proj = localProjector(res.coords[0]), un = localUnprojector(res.coords[0]);
   const rawXy = res.coords.map(proj), onRaw = nearestOnRoute(rawXy, proj(dropP), 0, rawXy.length - 1);
   const snapped = onRaw.point ? un(onRaw.point) : dropP;
-  const sn = removeSpurs(res.coords, res.eles || null, findSpurs(res.coords));
+  const sn = removeSpurs(res.coords, res.eles || null, findSpurs(res.coords), res.kinds || null);
   const cum = cumulative(sn.coords), snXy = sn.coords.map(proj), onSn = nearestOnRoute(snXy, proj(snapped), 0, snXy.length - 1);
   const overlap = overlapFraction(resample(sn.coords, cum, 25).pts);
   if (onSn.dist > 20 || overlap > overlapBefore + 0.15) return null;
-  return { coords: sn.coords, eles: sn.eles, cum, overlap };
+  return { coords: sn.coords, eles: sn.eles, cum, overlap, kinds: sn.extra };
 }
 // Share of a path's evenly spaced points that lie within tol metres of another path (how much of a new leg re-walks old ground).
 function retraceFraction(path, other, tol) {
@@ -1085,6 +1092,35 @@ function fitShape(coords, w, h, pad) {
   const put = q => [ox + (q[0] - x0) * k, oy + (y1 - q[1]) * k];
   return { pts: xy.map(put), place: p => put(proj(p)) };
 }
+// ---- What the loop runs along ----
+// kinds: one number per point for the stretch that starts there: the router's way type times 16, plus its suitability
+// score (1-10). Way types (openrouteservice's numbering): 1 main road (primary, trunk), 2 other road, 3 street, 4 path,
+// 5 track, 6 cycleway, 7 footway, 8 steps. Returns the metres on main roads, on other roads and on paths; the main-road
+// stretches as [fromIndex, toIndex] pairs (near neighbours joined, slivers dropped); and how serious it is: 0 fine,
+// 1 a stretch of main road, 2 much of the loop. Null when the router sent no way types.
+function roadStats(coords, cum, kinds, targetM) {
+  if (!kinds || kinds.length !== coords.length || coords.length < 2) return null;
+  let main = 0, road = 0, path = 0, sMin = 99, sMax = 0, open = -1; const raw = [];
+  for (let i = 0; i < coords.length - 1; i++) {
+    const t = kinds[i] >> 4, sc = kinds[i] & 15, len = cum[i + 1] - cum[i];
+    if (t === 1) { main += len; if (sc) { if (sc < sMin) sMin = sc; if (sc > sMax) sMax = sc; } if (open < 0) open = i; continue; }
+    if (open >= 0) { raw.push([open, i]); open = -1; }
+    if (t === 2) road += len; else if (t === 4 || t === 5 || t === 7 || t === 8) path += len;
+  }
+  if (open >= 0) raw.push([open, coords.length - 1]);
+  const runs = [];
+  for (const r of raw) { const last = runs[runs.length - 1]; if (last && cum[r[0]] - cum[last[1]] < 40) last[1] = r[1]; else runs.push(r.slice()); }
+  const total = cum[cum.length - 1], allow = Math.max(80, 0.02 * (targetM || total));
+  return { main: Math.round(main), road: Math.round(road), path: Math.round(path), runs: runs.filter(r => cum[r[1]] - cum[r[0]] >= 15),
+    level: main > Math.max(300, 0.15 * total) ? 2 : main > allow ? 1 : 0, suit: sMax ? [sMin, sMax] : null };
+}
+// How much a loop is marked down for the roads it uses, in the same currency as its distance error (0.1 = 10% off):
+// main-road metres count heavily, with a step once there is more than a crossing's worth; other roads count lightly,
+// so of two otherwise equal loops the one with more path wins.
+function busyCost(roads, total) {
+  if (!roads || !total) return 0;
+  return 3 * roads.main / total + (roads.level ? 0.15 : 0) + 0.1 * roads.road / total;
+}
 /*PURE-END*/
 
 // ---------- Network ----------
@@ -1103,6 +1139,19 @@ function orsTurns(f, coords) {
     }
   } catch (e) {}
   return out;
+}
+// One number per point for the stretch that starts there: way type * 16 + suitability (see roadStats). Null when the
+// router sent no way types (the backup router never does, so its loops carry no main-road warning).
+function orsKinds(f, n) {
+  try {
+    const ex = f.properties && f.properties.extras, wt = ex && ex.waytype && ex.waytype.values, su = ex && ex.suitability && ex.suitability.values;
+    if (!wt || !wt.length || n < 2) return null;
+    const out = new Array(n).fill(0);
+    for (const v of wt) for (let i = Math.max(0, v[0]); i < v[1] && i < n; i++) out[i] = ((v[2] | 0) & 15) * 16;
+    for (const v of (su || [])) for (let i = Math.max(0, v[0]); i < v[1] && i < n; i++) out[i] += Math.max(0, Math.min(15, v[2] | 0));
+    out[n - 1] = out[n - 2];
+    return out;
+  } catch (e) { return null; }
 }
 function osrmTurns(route) {
   const side = { 'left': 0, 'right': 1, 'sharp left': 2, 'sharp right': 3, 'slight left': 4, 'slight right': 5, 'uturn': 9 }, out = [];
@@ -1174,7 +1223,7 @@ function proxyError(res, j) {
 }
 
 // OpenRouteService (via the proxy): same waypoint loop, routed on the hiking profile with green/quiet weightings and elevation.
-let orsProfile = 'foot-hiking', orsGreenRejected = false, orsStraightRejected = false, orsNoAvoid = false;
+let orsProfile = 'foot-hiking', orsGreenRejected = false, orsStraightRejected = false, orsNoAvoid = false, orsNoExtras = false;
 // `avoid` is an optional GeoJSON polygon the route must keep out of (re-planning round a closed stretch).
 async function orsRoute(points, green, allowUturns, avoid) {
   if (orsGreenRejected) green = false;
@@ -1183,6 +1232,8 @@ async function orsRoute(points, green, allowUturns, avoid) {
     preference: 'recommended', elevation: true, instructions: true,
     radiuses: points.map(() => -1)
   };
+  // What each stretch is (main road, street, footpath...) and how suitable for walking: comes back with the same request.
+  if (!orsNoExtras) body.extra_info = ['waytype', 'suitability'];
   if (!allowUturns && !orsStraightRejected && points.length > 2) body.continue_straight = true;
   body.options = orsNoAvoid ? {} : { avoid_features: ['ferries'] };
   if (avoid) body.options.avoid_polygons = avoid;
@@ -1206,6 +1257,7 @@ async function orsRoute(points, green, allowUturns, avoid) {
     if (body.continue_straight && /continue_straight/i.test(msg)) { orsStraightRejected = true; return orsRoute(points, green, true, avoid); }
     if (avoid && /avoid_polygons|polygon/i.test(msg)) return orsRoute(points, green, allowUturns, null);
     if (green && /weighting|profile_params/i.test(msg)) { orsGreenRejected = true; return orsRoute(points, false, allowUturns, avoid); }
+    if (body.extra_info && /extra_info|waytype|suitability/i.test(msg)) { orsNoExtras = true; return orsRoute(points, green, allowUturns, avoid); }
     if (/avoid_features|options/i.test(msg) && body.options.avoid_features) { orsNoAvoid = true; return orsRoute(points, green, allowUturns, avoid); }
     if (res.status >= 500) throw Object.assign(new RouteError('key', 'The routing service is having trouble right now.'), { detail });
     throw new RouteError('http', 'Routing error' + (msg ? ': ' + msg : ' (' + res.status + ')'));
@@ -1215,7 +1267,7 @@ async function orsRoute(points, green, allowUturns, avoid) {
   const raw = f.geometry.coordinates;
   const coords = raw.map(c => [c[1], c[0]]);
   const eles = raw.every(c => typeof c[2] === 'number') ? raw.map(c => c[2]) : null;
-  return { coords, eles, distance: f.properties && f.properties.summary ? f.properties.summary.distance : null, turns: orsTurns(f, coords) };
+  return { coords, eles, distance: f.properties && f.properties.summary ? f.properties.summary.distance : null, turns: orsTurns(f, coords), kinds: orsKinds(f, coords.length) };
 }
 
 // ---------- Wikipedia (any language) ----------
@@ -1483,14 +1535,15 @@ async function fitTour(start, seq, targetM, router, onProgress, seed, pool, labe
       // otherwise it's the only stop: keep the spur and let the return-leg filler below turn it into a loop
     }
     if (awkward.size) { seq = seq.filter((_, k) => !awkward.has(k)); continue; }
-    const snipped = removeSpurs(res.coords, res.eles || null, snip); res.coords = snipped.coords; res.eles = snipped.eles;
+    const snipped = removeSpurs(res.coords, res.eles || null, snip, res.kinds || null); res.coords = snipped.coords; res.eles = snipped.eles;
     const cum = cumulative(res.coords), total = cum[cum.length - 1];
     const err = Math.abs(total - targetM) / targetM;
     const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
     // A loop that is a bit long beats one that walks the same way back.
-    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap, score: err + 0.6 * Math.max(0, overlap - 0.08), seed, seq: seq.slice(), turns: res.turns || null };
+    const roads = roadStats(res.coords, cum, snipped.extra, targetM), cost = err + busyCost(roads, total);
+    const cand = { coords: res.coords, eles: res.eles || null, cum, total, err, overlap, score: cost + 0.6 * Math.max(0, overlap - 0.08), cost, roads, seed, seq: seq.slice(), turns: res.turns || null };
     // Keep the attempt nearest the asked-for distance among those that don't double back; a doubling-back one only as a last resort.
-    if (overlap <= 0.25) { if (!best || best.overlap > 0.25 || err < best.err) best = cand; }
+    if (overlap <= 0.25) { if (!best || best.overlap > 0.25 || cost < best.cost) best = cand; }
     else if (!best || (best.overlap > 0.25 && cand.score < best.score)) best = cand;
     if (overlap > 0.25 && !seq.some(e => e.ret) && attempt < 4) { seq = seq.concat([{ p: returnFiller(start, res.coords, cum, targetM), poi: null, ret: true }]); continue; }
     if (err < 0.08) break;
@@ -1580,48 +1633,87 @@ async function generateLoop(start, targetM, seed, onProgress, router, vias) {
   if (vias.length >= 2) return generateViaLoop(start, vias, targetM, seed, router, onProgress);
   const via = vias[0] || null;
   const rng = mulberry32(seed);
-  let bearingDeg = rng() * 360, clockwise = rng() < 0.5, side = rng() < 0.5 ? 1 : -1;
   const K = via ? 5 : targetM <= 5000 ? 4 : targetM <= 12000 ? 5 : 6;
   const dVia = via ? haversine(start, via) : 0, perimMin = via ? ellipsePerimeter(dVia / 2, Math.max(150, 0.06 * dVia)) : 0;
-  const MAX_CALLS = 7;
-  let calls = 0, best = null;
-  for (let pass = 0; pass < 2 && calls < MAX_CALLS; pass++) {
-    const jitter = Array.from({ length: K + 2 }, () => ({ r: 0.85 + 0.3 * rng(), a: (rng() - 0.5) * 24 }));
-    let r = targetM / (2 * Math.PI) * 0.8, perim = Math.max(perimMin, targetM / 1.3);
+  // A "way" is one direction to send the ring in, with its own wobble. Up to WAYS of them are looked at; a way that
+  // meets a stretch of main road is left at once for another, facing away from where the main road was. Whatever tries
+  // are left then go on getting the best way's length right.
+  const MAX_CALLS = 7, WAYS = 3;
+  const newWay = (bearingDeg, clockwise, side) => ({ bearingDeg, clockwise, side, jitter: Array.from({ length: K + 2 }, () => ({ r: 0.85 + 0.3 * rng(), a: (rng() - 0.5) * 24 })) });
+  let way = newWay(rng() * 360, rng() < 0.5, rng() < 0.5 ? 1 : -1);
+  // The ring's size carries over from one way to the next (within reason): what the paths here needed to hit the
+  // distance one way is the best first guess for another.
+  const r0 = targetM / (2 * Math.PI) * 0.8, perim0 = Math.max(perimMin, targetM / 1.3);
+  let r = r0, perim = perim0, calls = 0, best = null, cutShort = false, closest = Infinity;
+  const tried = [], bad = [];   // bearings already faced; bearings from the start towards main road met on the way
+  const gap = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+  for (let pass = 0; pass <= WAYS && calls < MAX_CALLS && !cutShort; pass++) {
+    const settle = pass === WAYS;   // the last pass goes back to the best way found, only to get its length right
+    if (settle) { if (!best || best.err < 0.05 || !best.way) break; way = best.way; }
+    r = Math.min(1.8 * r0, Math.max(0.6 * r0, r)); perim = Math.max(perimMin, Math.min(1.8 * perim0, Math.max(0.6 * perim0, perim)));
+    let seen = null;                // the latest loop made this way
     for (let attempt = 0; attempt < 5 && calls < MAX_CALLS; attempt++) {
       calls++; onProgress && onProgress(calls, MAX_CALLS);
       let wps, viaIndex = -1;
-      if (via) { const plan = planViaWaypoints(start, via, perim, side, clockwise, K, jitter); if (!plan) throw new RouteError('noroute', 'That place is where you are already.'); wps = plan.pts; viaIndex = plan.viaIndex; }
-      else wps = planWaypoints(start, r, bearingDeg, clockwise, K, jitter);
+      if (via) { const plan = planViaWaypoints(start, via, perim, way.side, way.clockwise, K, way.jitter); if (!plan) throw new RouteError('noroute', 'That place is where you are already.'); wps = plan.pts; viaIndex = plan.viaIndex; }
+      else wps = planWaypoints(start, r, way.bearingDeg, way.clockwise, K, way.jitter);
       let res;
       try { res = await router(wps); }
-      catch (e) { if (e.kind === 'noroute') { bearingDeg = (bearingDeg + 75) % 360; side = -side; continue; } throw e; }
+      catch (e) {
+        if (e.kind === 'noroute') { way.bearingDeg = (way.bearingDeg + 75) % 360; way.side = -way.side; continue; }
+        // The routing service gave out part-way (allowance used up, signal lost): a loop already in hand beats starting again.
+        if (best && (e.kind === 'limit' || e.kind === 'key')) { cutShort = true; break; }
+        throw e;
+      }
       let spurs = findSpurs(res.coords);
       let nudged = false;
       for (const sp of spurs) {
         if (sp.len <= 150) continue;
         const wi = wps.findIndex((p, i) => i > 0 && i < wps.length - 1 && i !== viaIndex && haversine(p, sp.tip) < 150);
-        if (wi > 0 && calls < MAX_CALLS) { jitter[wi].a += 40; jitter[wi].r = Math.max(0.6, jitter[wi].r - 0.15); nudged = true; }
+        if (wi > 0 && calls < MAX_CALLS) { way.jitter[wi].a += 40; way.jitter[wi].r = Math.max(0.6, way.jitter[wi].r - 0.15); nudged = true; }
       }
       if (nudged) continue;
       if (via) spurs = spurs.filter(sp => haversine(sp.tip, via) > 60);   // a place up a dead end has to be reached and left the same way
-      const snipped = removeSpurs(res.coords, res.eles || null, spurs); res.coords = snipped.coords; res.eles = snipped.eles;
+      const snipped = removeSpurs(res.coords, res.eles || null, spurs, res.kinds || null); res.coords = snipped.coords; res.eles = snipped.eles;
       const cum = cumulative(res.coords), total = cum[cum.length - 1];
-      if (total < 100) { bearingDeg = (bearingDeg + 75) % 360; continue; }
+      if (total < 100) { way.bearingDeg = (way.bearingDeg + 75) % 360; continue; }
       const overlap = overlapFraction(resample(res.coords, cum, 25).pts);
       const err = Math.abs(total - targetM) / targetM;
-      const score = err + 0.6 * Math.max(0, overlap - 0.08);
-      const cand = { coords: res.coords, eles: res.eles || null, cum, total, overlap, err, score, seed, wps: wps.slice(1, -1), turns: res.turns || null };
-      if (overlap <= 0.25) { if (!best || best.overlap > 0.25 || err < best.err) best = cand; }
+      // What it runs along counts as well as how long it is: a loop a bit off the distance beats one down a main road.
+      const roads = roadStats(res.coords, cum, snipped.extra, targetM), cost = err + busyCost(roads, total);
+      const score = cost + 0.6 * Math.max(0, overlap - 0.08);
+      const cand = { coords: res.coords, eles: res.eles || null, cum, total, overlap, err, score, cost, roads, seed, wps: wps.slice(1, -1), turns: res.turns || null, way };
+      seen = cand;
+      if (overlap <= 0.25) { if (err < closest) closest = err; if (!best || best.overlap > 0.25 || cost < best.cost) best = cand; }
       else if (!best || (best.overlap > 0.25 && score < best.score)) best = cand;
       if (err < 0.05) break;
       r = Math.min(25000, Math.max(150, r * Math.pow(targetM / total, 0.9)));
       perim = Math.max(perimMin, Math.min(80000, perim * Math.pow(targetM / total, 0.9)));
+      // A stretch of main road this way: look another way before spending more tries on this one's length.
+      if (!settle && roads && roads.level && calls < MAX_CALLS) break;
     }
-    if (best && best.overlap < 0.3 && best.err < 0.15) break;
-    bearingDeg = (bearingDeg + 90 + rng() * 180) % 360; clockwise = !clockwise; side = -side;
+    if (cutShort || settle) break;
+    // Good enough to stop: about the right length, not doubling back, no stretch of main road.
+    if (best && best.overlap < 0.3 && best.err < 0.15 && !(best.roads && best.roads.level)) break;
+    // Otherwise face another way: away from any main road met so far if there was one, else simply somewhere else.
+    tried.push(way.bearingDeg);
+    if (seen && seen.roads && seen.roads.level && seen.roads.runs.length) {
+      const proj = localProjector(start); let x = 0, y = 0, w = 0;
+      for (const run of seen.roads.runs) { const len = seen.cum[run[1]] - seen.cum[run[0]], q = proj(pointAt(seen.coords, seen.cum, (seen.cum[run[0]] + seen.cum[run[1]]) / 2)); x += q[0] * len; y += q[1] * len; w += len; }
+      if (w && Math.hypot(x, y) / w > 40) bad.push((deg(Math.atan2(x, y)) + 360) % 360);
+    }
+    let next = (way.bearingDeg + 90 + rng() * 180) % 360;
+    if (bad.length && !via) {
+      // The bearing furthest from every main road met; among near-equals, one not faced before.
+      let top = -1; const off = rng() * 15;
+      for (let b = off; b < 360; b += 15) { const v = Math.min.apply(null, bad.map(q => gap(b, q))) + 0.1 * Math.min.apply(null, tried.map(q => gap(b, q))); if (v > top) { top = v; next = b; } }
+    }
+    way = newWay(next, !way.clockwise, -way.side);
   }
   if (!best) throw new RouteError('noroute', 'No walkable loop found from here. Try another distance, or shuffle.');
+  // For the note shown when a loop is off the distance: was a closer one passed over because of the roads it used?
+  best.dodged = best.err > closest + 0.04;
+  delete best.way;
   return best;
 }
 // Two or more pins: start → pins in the shortest order → start. The tour fitter bows a leg out if that comes up short
@@ -1676,11 +1768,11 @@ async function fitLeg(P, H, wantM, stops, side, router, avoid, onProgress) {
       return best;
     }
     const spurs = findSpurs(res.coords).filter(sp => sp.len <= 150 || !seq.some(s => haversine([s.lat, s.lon], sp.tip) < 120));
-    const snipped = removeSpurs(res.coords, res.eles || null, spurs);
+    const snipped = removeSpurs(res.coords, res.eles || null, spurs, res.kinds || null);
     const cum = cumulative(snipped.coords), total = cum[cum.length - 1];
     if (total < 50) return best;
     const err = Math.abs(total - wantM) / wantM;
-    const cand = { coords: snipped.coords, eles: snipped.eles, total, err, kept: seq.map(s => s.id), turns: res.turns || null };
+    const cand = { coords: snipped.coords, eles: snipped.eles, total, err, kept: seq.map(s => s.id), turns: res.turns || null, kinds: snipped.extra };
     if (!best || err < best.err) best = cand;
     if (err < 0.1) break;
     if (total > wantM * 1.1 && seq.length) { seq = weakest(seq); continue; }
@@ -1695,6 +1787,33 @@ const store = {
   set(k, v) { try { localStorage.setItem('rh.v1.' + k, JSON.stringify(v)); } catch (e) {} },
   del(k) { try { localStorage.removeItem('rh.v1.' + k); } catch (e) {} }
 };
+
+// ---------- Units ----------
+// Kilometres and metres, except on a phone set up for the United States (a US time zone, and a language setting that
+// isn't some other country's), which gets miles and feet. There is no switch on screen. Adding ?units=mi or ?units=km
+// to the address forces one or the other, and that choice is remembered on the phone.
+const MILE = 1609.344, FOOT = 0.3048;
+const US_ZONES = /^(America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Juneau|Sitka|Metlakatla|Yakutat|Nome|Adak|Detroit|Boise|Menominee|Indiana\/|Kentucky\/|North_Dakota\/)|Pacific\/Honolulu|US\/)/;
+function wantsMiles() {
+  try { const m = /[?&]units=(mi|km)\b/i.exec(location.search); if (m) store.set('units', m[1].toLowerCase()); } catch (e) {}
+  const forced = store.get('units', ''); if (forced === 'mi') return true; if (forced === 'km') return false;
+  let zone = ''; try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  const region = (/[-_]([A-Za-z]{2})\b/.exec(navigator.language || '') || [])[1];
+  return US_ZONES.test(zone) && (!region || region.toUpperCase() === 'US');
+}
+const units = { mi: wantsMiles() };
+// Distances walked or to walk: "8.2 km" / "5.1 mi" (distNum is the number alone).
+function distNum(m, dp) { return (m / (units.mi ? MILE : 1000)).toFixed(dp == null ? 1 : dp); }
+function distUnit() { return units.mi ? 'mi' : 'km'; }
+function fmtDist(m, dp) { return distNum(m, dp) + ' ' + distUnit(); }
+// Short distances (to the next turn, off the line): metres to the nearest ten, or feet to the nearest fifty; past a
+// kilometre / a tenth of a mile, the long form.
+function fmtShort(m) {
+  if (units.mi) return m < 160 ? Math.max(50, Math.round(m / FOOT / 50) * 50) + ' ft' : fmtDist(m);
+  return m < 1000 ? Math.max(10, Math.round(m / 10) * 10) + ' m' : fmtDist(m);
+}
+// Heights and GPS accuracy: "96 m" / "315 ft".
+function fmtSmall(m) { return units.mi ? Math.round(m / FOOT / 5) * 5 + ' ft' : Math.round(m) + ' m'; }
 
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
@@ -1755,6 +1874,7 @@ function arrowIcon(b) {
   return L.divIcon({ className: 'arrow', html: '<svg viewBox="0 0 24 24" style="transform:rotate(' + b.toFixed(0) + 'deg)"><path d="M12 3l7 14-7-4-7 4z" fill="#fff" stroke="' + getRouteColor() + '" stroke-width="2" stroke-linejoin="round"/></svg>', iconSize: [0, 0], iconAnchor: [0, 0] });
 }
 function getRouteColor() { return getComputedStyle(document.documentElement).getPropertyValue('--route').trim() || '#D1237A'; }
+function getCautionColor() { return getComputedStyle(document.documentElement).getPropertyValue('--caution').trim() || '#E08600'; }
 function getDoneColor() { return getComputedStyle(document.documentElement).getPropertyValue('--route-done').trim() || '#8C949A'; }
 
 function drawRoute(route) {
@@ -1763,6 +1883,8 @@ function drawRoute(route) {
   L.polyline(latlngs, { color: '#fff', weight: 9, opacity: .9, lineJoin: 'round', lineCap: 'round' }).addTo(routeGroup);
   doneLine = L.polyline([], { color: getDoneColor(), weight: 5, opacity: .95, lineJoin: 'round', lineCap: 'round' }).addTo(routeGroup);
   restLine = L.polyline(latlngs, { color: getRouteColor(), weight: 5, opacity: .95, lineJoin: 'round', lineCap: 'round' }).addTo(routeGroup);
+  // Stretches along a main road are picked out in amber, when there is enough of it to be worth the warning on the sheet.
+  if (route.roads && route.roads.level && route.roads.runs) for (const run of route.roads.runs) L.polyline(latlngs.slice(run[0], run[1] + 1), { color: getCautionColor(), weight: 5, opacity: 1, lineJoin: 'round', lineCap: 'round', interactive: false }).addTo(routeGroup);
   const n = Math.min(12, Math.max(5, Math.round(route.total / 700)));
   for (let i = 1; i < n; i++) {
     const d = route.total * i / n, a = pointAt(route.coords, route.cum, d), b = pointAt(route.coords, route.cum, Math.min(route.total, d + 25));
@@ -1794,7 +1916,7 @@ function renderStopsList() {
     const name = document.createElement('b'); name.textContent = s.title;
     const sub = document.createElement('small'); sub.textContent = s.desc || 'Wikipedia';
     t.appendChild(name); t.appendChild(sub);
-    const d = document.createElement('span'); d.className = 'dist'; d.textContent = s.at != null ? fmtKm(s.at) + ' km' : '';
+    const d = document.createElement('span'); d.className = 'dist'; d.textContent = s.at != null ? fmtDist(s.at) : '';
     b.appendChild(pin); b.appendChild(t); b.appendChild(d);
     b.addEventListener('click', () => openCard(i));
     list.appendChild(b);
@@ -1869,21 +1991,25 @@ function renderPlanHint() {
 
 // ---------- Routing preference; About (behind the Round Here badge) ----------
 function routingMode() { return 'green'; }
-function renderDiag() { const d = $('diag'); if (!d) return; d.textContent = diag.last || store.get('diag', '') || ''; d.hidden = !d.textContent; }
+function renderDiag() { const d = $('diag'); if (!d) return; d.textContent = [store.get('diagLoop', ''), diag.last || store.get('diag', '') || ''].filter(Boolean).join(' — '); d.hidden = !d.textContent; }
 const elAb = { wrap: $('aboutWrap'), close: $('aboutClose') };
-el.brand.addEventListener('click', () => { elAb.wrap.hidden = false; });
+el.brand.addEventListener('click', () => { renderDiag(); elAb.wrap.hidden = false; });
 elAb.close.addEventListener('click', () => { elAb.wrap.hidden = true; });
 elAb.wrap.addEventListener('click', e => { if (e.target === elAb.wrap) elAb.wrap.hidden = true; });
-el.distRange.value = state.targetKm;
-
+// The slider works in whatever the phone shows (half-kilometre or half-mile steps); the app thinks in kilometres throughout.
+if (units.mi) {
+  el.distRange.min = 1; el.distRange.max = 18.5; el.distRange.step = 0.5; el.distRange.setAttribute('aria-label', 'Distance in miles');
+  $('distUnit').textContent = 'mi'; $('wUnit').textContent = 'mi done';
+  state.targetKm = Math.min(18.5, Math.max(1, Math.round(state.targetKm * 1000 / MILE * 2) / 2)) * MILE / 1000;
+}
 function setDistance(km, fromSlider) {
   state.targetKm = km; store.set('distance', km);
-  el.distBig.textContent = km.toFixed(1);
+  el.distBig.textContent = distNum(km * 1000);
   $('distTime').textContent = 'about ' + fmtTime(Math.max(5, Math.round(estimateMinutes(km * 1000, 0) / 5) * 5));
-  if (!fromSlider) el.distRange.value = km;
+  if (!fromSlider) el.distRange.value = units.mi ? Math.round(km * 1000 / MILE * 2) / 2 : km;
 }
 setDistance(state.targetKm);
-el.distRange.addEventListener('input', () => setDistance(Number(el.distRange.value), true));
+el.distRange.addEventListener('input', () => { const v = Number(el.distRange.value); setDistance(units.mi ? v * MILE / 1000 : v, true); });
 
 function setStart(p, mode, acc) {
   state.start = { p, mode, acc };
@@ -1905,7 +2031,7 @@ function locateOnce(opts) {
     const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
     state.lastFix = { p, acc, t: Date.now() };
     store.set('lastPos', p);
-    setGps('gps-ok', 'GPS ±' + acc + ' m');
+    setGps('gps-ok', 'GPS ±' + fmtSmall(acc));
     updateMeMarker(p, acc, null);
     if (state.mode === 'plan' && (!state.start || state.start.mode === 'gps' || opts.force)) setStart(p, 'gps', acc);
     renderGo();
@@ -1972,18 +2098,18 @@ function viaFits() {
   if (!state.vias.length || !state.start) return true;
   const minM = viasMinTarget(state.start.p, state.vias);
   if (state.targetKm * 1000 >= minM * 0.98) return true;
-  viaSuggestKm = Math.min(30, Math.ceil(minM / 500) / 2);
+  viaSuggestKm = units.mi ? Math.min(18.5, Math.ceil(minM / MILE * 2) / 2) * MILE / 1000 : Math.min(30, Math.ceil(minM / 500) / 2);
   const n = state.vias.length;
-  el.viaTitle.textContent = (n === 1 ? 'Pin' : 'Pins') + ' too far for ' + state.targetKm.toFixed(1) + ' km';
+  el.viaTitle.textContent = (n === 1 ? 'Pin' : 'Pins') + ' too far for ' + fmtDist(state.targetKm * 1000);
   el.viaText.textContent = n === 1
-    ? 'Your pin is about ' + fmtKm(haversine(state.start.p, state.vias[0])) + ' km away as the crow flies. A loop that goes via it and back needs at least ' + viaSuggestKm.toFixed(1) + ' km.'
-    : 'Your ' + n + ' pins are about ' + fmtKm(loopLength([state.start.p].concat(orderVias(state.start.p, state.vias), [state.start.p]))) + ' km round as the crow flies. A loop through them all needs at least ' + viaSuggestKm.toFixed(1) + ' km.';
-  el.viaSet.textContent = 'Set ' + viaSuggestKm.toFixed(1) + ' km';
+    ? 'Your pin is about ' + fmtDist(haversine(state.start.p, state.vias[0])) + ' away as the crow flies. A loop that goes via it and back needs at least ' + fmtDist(viaSuggestKm * 1000) + '.'
+    : 'Your ' + n + ' pins are about ' + fmtDist(loopLength([state.start.p].concat(orderVias(state.start.p, state.vias), [state.start.p]))) + ' round as the crow flies. A loop through them all needs at least ' + fmtDist(viaSuggestKm * 1000) + '.';
+  el.viaSet.textContent = 'Set ' + fmtDist(viaSuggestKm * 1000);
   el.viaDrop.textContent = n === 1 ? 'Remove the pin' : 'Remove the pins';
   el.viaWrap.hidden = false;
   return false;
 }
-el.viaSet.addEventListener('click', () => { el.viaWrap.hidden = true; setDistance(viaSuggestKm); toast('Distance set to ' + viaSuggestKm.toFixed(1) + ' km. Make the loop when you\'re ready.'); });
+el.viaSet.addEventListener('click', () => { el.viaWrap.hidden = true; setDistance(viaSuggestKm); toast('Distance set to ' + fmtDist(viaSuggestKm * 1000) + '. Make the loop when you\'re ready.'); });
 el.viaDrop.addEventListener('click', () => { el.viaWrap.hidden = true; clearVias(); toast('Pins removed'); });
 el.viaWrap.addEventListener('click', e => { if (e.target === el.viaWrap) el.viaWrap.hidden = true; });
 el.viaClear.addEventListener('click', () => { clearVias(); toast('Pins removed'); });
@@ -2029,14 +2155,15 @@ async function makeLoop(seed) {
       const r = await generateLoop(start, targetM, seed, progress, router, state.vias); r.kind = 'loop'; return r;
     };
     let route;
-    try { route = await routeWith(pts => orsRoute(pts, mode === 'green')); }
+    let routeCalls = 0;
+    try { route = await routeWith(pts => { routeCalls++; return orsRoute(pts, mode === 'green'); }); }
     catch (e) {
       if (e.kind === 'key' || e.kind === 'limit') {
         diag.routing = 'fell back (' + (e.detail || e.message) + ')';
         if (!e.limited) toast((e.kind === 'limit' ? e.message : 'Green routing is unavailable right now.') + ' Standard routing for this one.', 7000);
         // A limit means the places lookup is refused too, so make a plain loop; otherwise keep the tour and only swap the router.
         const wasTour = state.kind; if (e.limited) state.kind = 'loop';
-        try { route = await routeWith(osrmRoute); } finally { state.kind = wasTour; }
+        try { route = await routeWith(pts => { routeCalls++; return osrmRoute(pts); }); } finally { state.kind = wasTour; }
         route.fallback = true;
       } else throw e;
     }
@@ -2046,6 +2173,14 @@ async function makeLoop(seed) {
     if (mode === 'green' && orsGreenRejected && !route.fallback) toast('The green preference was refused, so this loop is trail routing without it.', 7000);
     try { if (location.hash) history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
     adoptRoute(route);
+    // Say so straight away when the loop isn't what was asked for: off the distance, or largely main road.
+    const notes = [];
+    if (route.err > 0.12) notes.push(route.dodged ? 'This loop is ' + fmtDist(route.total) + ' (you asked for ' + fmtDist(targetM) + '): the closer ones ran along a main road.' : 'Closest loop the paths here allow is ' + fmtDist(route.total) + ' (you asked for ' + fmtDist(targetM) + ').');
+    if (route.roads && route.roads.level === 2) notes.push('Much of it is along main roads, shown in amber. There may be no good loop of this length from here.');
+    if (notes.length) toast(notes.join(' '), 9000);
+    // A line for About, so what the routing service sent back can be checked from the phone.
+    const rd = route.roads;
+    store.set('diagLoop', 'Last loop: ' + fmtDist(route.total) + ' (asked ' + fmtDist(targetM) + ') · ' + routeCalls + ' routing calls · ' + (route.fallback ? 'backup router' : 'main router') + ' · road types ' + (rd ? 'received' : 'not received') + (rd ? ' · main road ' + rd.main + ' m' + (rd.suit ? ' (suitability ' + rd.suit[0] + ' to ' + rd.suit[1] + ')' : '') + ', other road ' + rd.road + ' m, path ' + rd.path + ' m' : '') + ' · turn list ' + (route.cues && route.cues.length ? route.cues.length + ' turns' : 'none'));
   } catch (e) {
     diag.error = e && e.message || 'error';
     toast(e.message || 'Something went wrong making the loop.', 6000);
@@ -2095,7 +2230,7 @@ function adoptRoute(route) {
   cacheForOffline(route);
 }
 function serializeRoute(r) {
-  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null, vias: r.vias && r.vias.length ? r.vias : null, wps: r.wps || null, cues: r.cues || null, edited: !!r.edited, replanned: !!r.replanned };
+  return { coords: r.coords.map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]), total: r.total, seed: r.seed, overlap: r.overlap, err: r.err, startMode: r.startMode, createdAt: r.createdAt, profile: r.profile, ascent: r.ascent, descent: r.descent, mode: r.mode, kind: r.kind, theme: r.theme || null, shared: !!r.shared, stops: r.stops || null, targetM: r.targetM || null, pool: r.pool || null, skipped: r.skipped || null, vias: r.vias && r.vias.length ? r.vias : null, wps: r.wps || null, cues: r.cues || null, roads: r.roads || null, edited: !!r.edited, replanned: !!r.replanned };
 }
 // "Skip this stop" from the card: swap it for the next best candidate and re-route, keeping the other stops.
 async function skipStop(i) {
@@ -2182,7 +2317,7 @@ async function shareRoute() {
   let url;
   try { url = location.origin + location.pathname + '#r=' + await packShare(packRoute(r)); }
   catch (e) { toast('Could not build the share link.'); return; }
-  const title = (r.stops ? 'A ' + fmtKm(r.total) + ' km walking tour' : 'A ' + fmtKm(r.total) + ' km loop') + ' on Round Here';
+  const title = (r.stops ? 'A ' + fmtDist(r.total) + ' walking tour' : 'A ' + fmtDist(r.total) + ' loop') + ' on Round Here';
   try { if (navigator.share) { await navigator.share({ title, text: title + (r.stops ? ' with ' + r.stops.length + ' stops.' : '.'), url }); return; } }
   catch (e) { if (e && e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it to whoever you like.'); }
@@ -2230,14 +2365,30 @@ function renderEyebrow() {
   el.routeEyebrow.disabled = !n;
   el.routeEyebrow.setAttribute('aria-expanded', String(!sheetCollapsed));
 }
+// A stretch of main road on the loop gets one line on the route sheet, there whether the sheet is open or tucked away.
+// Tap it and the map goes to the longest such stretch (drawn in amber).
+function renderRoadNote() {
+  const r = state.route, rd = r && r.roads, note = $('roadNote');
+  if (!rd || !rd.level) { note.hidden = true; return; }
+  $('roadNoteText').textContent = fmtShort(rd.main) + (rd.level === 2 ? ' of this loop is along main roads. No good loop found from here.' : ' of this loop is along a main road. Tap to see where.');
+  note.hidden = false;
+}
+$('roadNote').addEventListener('click', () => {
+  const r = state.route, rd = r && r.roads; if (!rd || !rd.runs || !rd.runs.length) return;
+  let run = rd.runs[0]; for (const x of rd.runs) if (r.cum[x[1]] - r.cum[x[0]] > r.cum[run[1]] - r.cum[run[0]]) run = x;
+  snapNorth();
+  const inset = screenInset(), pb = Math.min(el.sheet.offsetHeight + 24, Math.round(window.innerHeight * 0.6));
+  map.fitBounds(L.latLngBounds(r.coords.slice(run[0], run[1] + 1)), { paddingTopLeft: [inset[0] + 40, inset[1] + 90], paddingBottomRight: [inset[0] + 40, inset[1] + pb + 20], maxZoom: 17, animate: false });
+});
 // The line under the route buttons only takes up room when it has something to say.
 function setRouteHint(text) { el.routeHint.textContent = text; el.routeHint.hidden = !text || editMode; }
 function renderRouteStats() {
   const r = state.route; if (!r) return;
   renderEyebrow();
   renderStopsList();
-  el.stDist.textContent = fmtKm(r.total) + ' km';
-  el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + r.ascent + ' m';
+  el.stDist.textContent = fmtDist(r.total);
+  el.stAsc.textContent = r.ascent == null ? '…' : '↑ ' + fmtSmall(r.ascent);
+  renderRoadNote();
   el.stTime.textContent = '~' + fmtTime(estimateMinutes(r.total, r.ascent || 0));
   const tag = r.shared ? 'Sent to you. It starts at the S pin, so head there first. ' : '';
   setRouteHint(tag + (r.overlap > 0.3 ? 'Some of this loop doubles back on itself. Shuffle for a different shape.' : (r.err > 0.12 ? 'Closest loop the paths here allow; the length is ' + (r.total > state.targetKm * 1000 ? 'longer' : 'shorter') + ' than you asked for.' : '')));
@@ -2259,10 +2410,10 @@ function renderProfile(progress) {
   const col = getRouteColor();
   let out = '<path d="' + area + '" fill="' + col + '" fill-opacity="0.18"/>' +
     '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="2" stroke-linejoin="round"/>' +
-    '<text x="' + padL + '" y="14">' + Math.round(mx) + ' m</text>' +
-    '<text x="' + (W - padR) + '" y="14" text-anchor="end">↓ ' + (r.descent == null ? '–' : r.descent) + ' m</text>' +
-    '<text x="' + padL + '" y="' + (H - 4) + '">' + Math.round(mn) + ' m</text>' +
-    '<text x="' + (W - padR) + '" y="' + (H - 4) + '" text-anchor="end">' + fmtKm(total) + ' km</text>';
+    '<text x="' + padL + '" y="14">' + fmtSmall(mx) + '</text>' +
+    '<text x="' + (W - padR) + '" y="14" text-anchor="end">↓ ' + (r.descent == null ? '–' : fmtSmall(r.descent)) + '</text>' +
+    '<text x="' + padL + '" y="' + (H - 4) + '">' + fmtSmall(mn) + '</text>' +
+    '<text x="' + (W - padR) + '" y="' + (H - 4) + '" text-anchor="end">' + fmtDist(total) + '</text>';
   if (progress != null) {
     const x = sx(Math.min(total, Math.max(0, progress))).toFixed(1);
     out += '<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H - padB) + '" stroke="' + col + '" stroke-width="2" stroke-dasharray="3 3"/>';
@@ -2287,7 +2438,7 @@ el.btnBack.addEventListener('click', () => {
 async function exportGpx() {
   const r = state.route; if (!r) return;
   const d = new Date(), stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  const name = 'Loop ' + fmtKm(r.total) + ' km ' + stamp, fname = 'loop-' + fmtKm(r.total) + 'km-' + stamp + '.gpx';
+  const name = 'Loop ' + fmtDist(r.total) + ' ' + stamp, fname = 'loop-' + distNum(r.total) + distUnit() + '-' + stamp + '.gpx';
   const gpx = buildGpx(name, r.coords, r.cum, r.profile, r.stops);
   try {
     const file = new File([gpx], fname, { type: 'application/gpx+xml' });
@@ -2362,7 +2513,7 @@ function renderNextStop(progress) {
   const d = along != null && along > -60 ? Math.max(0, along) : (state.lastFix ? haversine(state.lastFix.p, [s.lat, s.lon]) : null);
   n.appendChild(document.createTextNode('Next: '));
   const b = document.createElement('b'); b.textContent = s.title; n.appendChild(b);
-  if (d != null) n.appendChild(document.createTextNode(' · ' + (d >= 1000 ? fmtKm(d) + ' km' : Math.round(d) + ' m')));
+  if (d != null) n.appendChild(document.createTextNode(' · ' + fmtShort(d)));
   n.hidden = false;
 }
 
@@ -2439,7 +2590,7 @@ function nextCue(r, progress) {
 }
 function cueView(c, progress) {
   const d = c.at - progress, now = d <= 15;
-  const dist = now ? 'Now' : d < 1000 ? Math.max(20, Math.round(d / 10) * 10) + ' m' : fmtKm(d) + ' km';
+  const dist = now ? 'Now' : fmtShort(d);
   const kind = c.t === 9 ? 'back' : c.t === 7 ? 'round' : (c.t === 2 || c.t === 3) ? 'sharp' : (c.t === 4 || c.t === 5 || c.t === 12 || c.t === 13) ? 'slight' : 'turn';
   const word = c.t === 9 ? 'Turn back' : c.t === 7 ? 'Roundabout' + (c.x ? ', exit ' + c.x : '') : c.t === 12 ? 'Keep left' : c.t === 13 ? 'Keep right' : '';
   const bits = [dist]; if (word) bits.push(word); if (c.n) bits.push(c.n);
@@ -2460,7 +2611,7 @@ function onFix(pos) {
   const w = state.walk, r = state.route; if (!w || !r) return;
   const p = [pos.coords.latitude, pos.coords.longitude], acc = Math.round(pos.coords.accuracy || 0);
   state.lastFix = { p, acc, t: Date.now() }; store.set('lastPos', p);
-  setGps('gps-ok', 'GPS ±' + acc + ' m');
+  setGps('gps-ok', 'GPS ±' + fmtSmall(acc));
   if (welcome) { askLocation = false; endWelcome(); }
   const speed = pos.coords.speed, hd = pos.coords.heading;
   if (hd != null && !isNaN(hd) && (speed == null || speed > 0.4)) state.lastHeading = hd;
@@ -2495,9 +2646,9 @@ function onFix(pos) {
   } else {
     w.offCount++; w.onCount = 0;
     const d = Math.round(near.dist);
-    setStatus('off', 'Off route · ' + d + ' m');
-    if (!w.off && w.offCount >= 2) { w.off = true; el.banner.hidden = false; el.bannerText.textContent = 'Off route — ' + d + ' m from the line.'; buzz([250, 120, 250]); beep(2); }
-    else if (w.off) el.bannerText.textContent = 'Off route — ' + d + ' m from the line.';
+    setStatus('off', 'Off route · ' + fmtShort(d));
+    if (!w.off && w.offCount >= 2) { w.off = true; el.banner.hidden = false; el.bannerText.textContent = 'Off route — ' + fmtShort(d) + ' from the line.'; buzz([250, 120, 250]); beep(2); }
+    else if (w.off) el.bannerText.textContent = 'Off route — ' + fmtShort(d) + ' from the line.';
     // Once the banner is up (two fixes off the line), offer a new way back. Only ever an offer, never automatic.
     el.btnReplan.hidden = !(w.off && !w.finished && !state.busy);
   }
@@ -2508,8 +2659,8 @@ function onFix(pos) {
 function updateWalkUi(progress) {
   const r = state.route, w = state.walk; if (!r || !w) return;
   const done = progress == null ? w.progress : progress, left = Math.max(0, r.total - done);
-  el.wDone.textContent = fmtKm(done);
-  el.wLeft.textContent = fmtKm(left) + ' km to go';
+  el.wDone.textContent = distNum(done);
+  el.wLeft.textContent = fmtDist(left) + ' to go';
   el.progBar.style.width = Math.min(100, done / r.total * 100).toFixed(1) + '%';
   let ascLeft = 0;
   if (r.profile) {
@@ -2526,8 +2677,8 @@ const SITE = /^https?:$/.test(location.protocol) ? (location.host + location.pat
 let shareFile = null;   // null while drawing, false if this browser couldn't draw it
 function showDone(r, w) {
   const mins = Math.round((Date.now() - w.startedAt) / 60000), tour = !!(r.stops && r.stops.length);
-  const bits = [fmtKm(r.total) + ' km', fmtTime(mins)];
-  if (r.ascent != null) bits.push('↑ ' + r.ascent + ' m');
+  const bits = [fmtDist(r.total), fmtTime(mins)];
+  if (r.ascent != null) bits.push('↑ ' + fmtSmall(r.ascent));
   if (tour) bits.push(r.stops.filter(s => s.visited).length + ' of ' + r.stops.length + ' stops');
   el.doneTitle.textContent = tour ? 'Tour complete' : 'Loop complete';
   el.doneText.textContent = bits.join(' · ');
@@ -2535,7 +2686,7 @@ function showDone(r, w) {
   $('doneLoop').innerHTML = '<path d="M' + sh.pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('L') + '"/><circle cx="' + s0[0].toFixed(1) + '" cy="' + s0[1].toFixed(1) + '" r="6"/>';
   el.doneWrap.hidden = false;
   shareFile = null;
-  sharePicture(r, { title: tour ? 'Tour complete' : 'Loop complete', km: fmtKm(r.total), sub: bits.slice(1).join(' · ') })
+  sharePicture(r, { title: tour ? 'Tour complete' : 'Loop complete', km: distNum(r.total), unit: distUnit(), sub: bits.slice(1).join(' · ') })
     .then(f => { shareFile = f || false; }).catch(() => { shareFile = false; });
 }
 // The picture: the loop's shape on a plain green card with the numbers, the name and the web address. No map behind it,
@@ -2567,7 +2718,7 @@ async function sharePicture(r, info) {
   g.fillText(info.title.toUpperCase(), 80, 960); spaced('0px');
   g.textBaseline = 'alphabetic'; g.fillStyle = paper; g.font = '800 170px ' + font; g.fillText(info.km, 72, 1128);
   const kmW = g.measureText(info.km).width;
-  g.fillStyle = soft; g.font = '700 64px ' + font; g.fillText('km', 72 + kmW + 20, 1128);
+  g.fillStyle = soft; g.font = '700 64px ' + font; g.fillText(info.unit || 'km', 72 + kmW + 20, 1128);
   g.fillStyle = paper; g.font = '600 44px ' + font; g.fillText(info.sub, 80, 1198);
   g.fillStyle = soft; g.font = '600 32px ' + font; g.fillText(SITE, 80, 1284);
   return new Promise(res => { try { cv.toBlob(b => res(b ? new File([b], 'round-here-walk.png', { type: 'image/png' }) : null), 'image/png'); } catch (e) { res(null); } });
@@ -2616,7 +2767,7 @@ async function replanFromHere() {
     catch (e) { if (e.kind === 'key' || e.kind === 'limit') leg = await fitLeg(P, H, want, pending, side, pts => osrmRoute(pts), null, progress); else throw e; }
     if (!leg) throw new RouteError('noroute', 'No other way back from here that the paths allow.');
     applyReplan(r, w, leaveM, P, leg);
-    toastAction('New way back: ' + fmtKm(Math.max(0, r.total - w.progress)) + ' km to go.', 'Undo', undoReplan);
+    toastAction('New way back: ' + fmtDist(Math.max(0, r.total - w.progress)) + ' to go.', 'Undo', undoReplan);
   } catch (e) {
     toast(e.kind === 'network' || e.detail === 'unreachable' ? 'No signal, so the route can\'t be re-planned yet. The old one stays.' : (e.message || 'Could not re-plan from here.'), 6000);
   } finally {
@@ -2624,7 +2775,7 @@ async function replanFromHere() {
   }
 }
 function applyReplan(r, w, leaveM, P, leg) {
-  replanUndo = { coords: r.coords, cum: r.cum, total: r.total, stops: r.stops ? r.stops.map(s => Object.assign({}, s)) : null, profile: r.profile, ascent: r.ascent, descent: r.descent, cues: r.cues || null, progress: w.progress, lastIdx: w.lastIdx };
+  replanUndo = { coords: r.coords, cum: r.cum, total: r.total, stops: r.stops ? r.stops.map(s => Object.assign({}, s)) : null, profile: r.profile, ascent: r.ascent, descent: r.descent, cues: r.cues || null, roads: r.roads || null, progress: w.progress, lastIdx: w.lastIdx };
   // The old route up to where you left it, a straight join to where you stand, then the new leg.
   let cut = 0; while (cut < r.cum.length - 1 && r.cum[cut + 1] <= leaveM) cut++;
   const coords = r.coords.slice(0, cut + 1).concat([pointAt(r.coords, r.cum, leaveM), P], leg.coords);
@@ -2645,6 +2796,13 @@ function applyReplan(r, w, leaveM, P, leg) {
   // Turns already behind you stay as they were; the new leg brings its own, looked for from where you stand onwards.
   // (The straight join to where you stand isn't a real corner, so nothing counts within a few steps of it.)
   r.cues = (replanUndo.cues || []).filter(c => c.at <= leaveM).concat(buildCues(r.coords, r.cum, leg.turns, pIdx).filter(c => c.at > r.cum[pIdx] + 12));
+  // Main-road stretches likewise: the ones behind you stay, the new leg brings its own.
+  {
+    const kinds = new Array(r.coords.length).fill(0); let any = !!leg.kinds;
+    for (const run of ((replanUndo.roads && replanUndo.roads.runs) || [])) if (run[1] <= cut) { any = true; for (let i = run[0]; i < run[1]; i++) kinds[i] = 16; }
+    if (leg.kinds) for (let i = 0; i < leg.kinds.length && pIdx + 1 + i < kinds.length; i++) kinds[pIdx + 1 + i] = leg.kinds[i];
+    r.roads = any ? roadStats(r.coords, r.cum, kinds, r.targetM) : null;
+  }
   w.proj = localProjector(r.coords[0]); w.xy = r.coords.map(w.proj);
   w.lastIdx = pIdx; w.progress = r.cum[pIdx];
   w.off = false; w.offCount = 0; w.onCount = 0;
@@ -2657,7 +2815,7 @@ function applyReplan(r, w, leaveM, P, leg) {
 }
 function undoReplan() {
   const r = state.route, w = state.walk, u = replanUndo; if (!r || !u) return; replanUndo = null;
-  Object.assign(r, { coords: u.coords, cum: u.cum, total: u.total, stops: u.stops, profile: u.profile, ascent: u.ascent, descent: u.descent, cues: u.cues, replanned: false });
+  Object.assign(r, { coords: u.coords, cum: u.cum, total: u.total, stops: u.stops, profile: u.profile, ascent: u.ascent, descent: u.descent, cues: u.cues, roads: u.roads, replanned: false });
   hideArrive();
   drawRoute(r); renderStopsList();
   if (w) {
@@ -2796,6 +2954,7 @@ async function applyEdit(g) {
     if (r.eles) profileFromEles(r); else loadElevation(r);
     relocateStops(r);
     r.cues = res.turns ? buildCues(r.coords, r.cum, res.turns) : null;
+    r.roads = roadStats(r.coords, r.cum, ok.kinds, r.targetM);
     drawRoute(r); renderRouteStats(); store.set('route', serializeRoute(r)); renderUndo();
   } catch (e) {
     toast(e.kind === 'noroute' ? 'No path through there on foot. Try a spot on a street or footpath.' : (e.message || 'Could not re-route.'), 5000);
