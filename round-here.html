@@ -317,7 +317,7 @@ a.btn{text-decoration:none}
       <p class="hint">If this got you out for a walk, a small donation keeps the routing paid for. One-off or monthly, no account needed.</p>
       <p class="credits">Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Routing © <a href="https://openrouteservice.org" target="_blank" rel="noopener">openrouteservice.org</a> by HeiGIT, backup by <a href="https://www.fossgis.de" target="_blank" rel="noopener">FOSSGIS</a> · Places powered by <a href="https://www.geoapify.com/" target="_blank" rel="noopener">Geoapify</a> · Elevation by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> · Stories and photos from <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a> (CC BY-SA)</p>
       <p class="credits">Loops are worked out by computer from open map data and can be wrong. Check the route before you set off, and take care on roads.</p>
-      <p class="tag" id="version">Round Here v7.1</p>
+      <p class="tag" id="version">Round Here v7.3</p>
       <p class="credits" id="diag" hidden></p>
       <button class="btn primary" id="aboutClose">Close</button>
     </div>
@@ -1244,7 +1244,9 @@ async function orsRoute(points, green, allowUturns, avoid) {
   } catch (e) { throw Object.assign(new RouteError('key', 'Could not reach the routing service.'), { detail: 'unreachable' }); }
   let j = null; try { j = await res.json(); } catch (e) {}
   const pe = proxyError(res, j); if (pe) throw pe;
-  const detail = 'HTTP ' + res.status + (j && (j.message || (j.error && j.error.message)) ? ': ' + String(j.message || j.error.message).slice(0, 120) : '');
+  // The service's own words, whichever way its reply carries them (a daily-limit refusal is just { error: "Quota exceeded" }).
+  const said = j ? (j.message || (j.error && (j.error.message || (typeof j.error === 'string' ? j.error : ''))) || '') : '';
+  const detail = 'HTTP ' + res.status + (said ? ': ' + String(said).slice(0, 120) : '');
   if (res.status === 401 || res.status === 403) throw Object.assign(new RouteError('key', 'The routing service is unavailable right now.'), { detail });
   if (res.status === 429) throw Object.assign(new RouteError('key', 'The routing service is busy right now.'), { detail });
   if (res.status === 404 && orsProfile === 'foot-hiking' && !(j && j.error && j.error.code)) { orsProfile = 'foot-walking'; return orsRoute(points, green, allowUturns, avoid); }
@@ -2155,12 +2157,12 @@ async function makeLoop(seed) {
       const r = await generateLoop(start, targetM, seed, progress, router, state.vias); r.kind = 'loop'; return r;
     };
     let route;
-    let routeCalls = 0;
+    let routeCalls = 0, fellBack = '';
     try { route = await routeWith(pts => { routeCalls++; return orsRoute(pts, mode === 'green'); }); }
     catch (e) {
       if (e.kind === 'key' || e.kind === 'limit') {
         diag.routing = 'fell back (' + (e.detail || e.message) + ')';
-        if (!e.limited) toast((e.kind === 'limit' ? e.message : 'Green routing is unavailable right now.') + ' Standard routing for this one.', 7000);
+        fellBack = e.detail || e.message || 'no reason given';   // kept for About; nothing the walker can act on, so nothing on screen
         // A limit means the places lookup is refused too, so make a plain loop; otherwise keep the tour and only swap the router.
         const wasTour = state.kind; if (e.limited) state.kind = 'loop';
         try { route = await routeWith(pts => { routeCalls++; return osrmRoute(pts); }); } finally { state.kind = wasTour; }
@@ -2180,7 +2182,7 @@ async function makeLoop(seed) {
     if (notes.length) toast(notes.join(' '), 9000);
     // A line for About, so what the routing service sent back can be checked from the phone.
     const rd = route.roads;
-    store.set('diagLoop', 'Last loop: ' + fmtDist(route.total) + ' (asked ' + fmtDist(targetM) + ') · ' + routeCalls + ' routing calls · ' + (route.fallback ? 'backup router' : 'main router') + ' · road types ' + (rd ? 'received' : 'not received') + (rd ? ' · main road ' + rd.main + ' m' + (rd.suit ? ' (suitability ' + rd.suit[0] + ' to ' + rd.suit[1] + ')' : '') + ', other road ' + rd.road + ' m, path ' + rd.path + ' m' : '') + ' · turn list ' + (route.cues && route.cues.length ? route.cues.length + ' turns' : 'none'));
+    store.set('diagLoop', 'Last loop: ' + fmtDist(route.total) + ' (asked ' + fmtDist(targetM) + ') · ' + routeCalls + ' routing calls · ' + (route.fallback ? 'backup router (the main one said: ' + fellBack + ')' : 'main router') + ' · road types ' + (rd ? 'received' : 'not received') + (rd ? ' · main road ' + rd.main + ' m' + (rd.suit ? ' (suitability ' + rd.suit[0] + ' to ' + rd.suit[1] + ')' : '') + ', other road ' + rd.road + ' m, path ' + rd.path + ' m' : '') + ' · turn list ' + (route.cues && route.cues.length ? route.cues.length + ' turns' : 'none'));
   } catch (e) {
     diag.error = e && e.message || 'error';
     toast(e.message || 'Something went wrong making the loop.', 6000);
@@ -2246,7 +2248,7 @@ async function skipStop(i) {
     const progress = (n, max) => { elC.skip.innerHTML = '<span class="spinner"></span> Re-routing… ' + n + '/' + max; };
     let next;
     try { next = await swapStop(r, gone.id, router, progress); }
-    catch (e) { if (e.kind === 'key' || e.kind === 'limit') { toast(e.kind === 'limit' ? e.message : 'Green routing is unavailable right now; standard routing for this change.', 6000); next = await swapStop(r, gone.id, osrmRoute, progress); } else throw e; }
+    catch (e) { if (e.kind === 'key' || e.kind === 'limit') { next = await swapStop(r, gone.id, osrmRoute, progress); } else throw e; }
     if (!next) { toast('That was the last stop. Shuffle or make a new tour instead.', 5000); return; }
     next.mode = r.mode; next.shared = false;
     closeCard(); adoptRoute(next);
